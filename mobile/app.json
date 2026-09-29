@@ -38,7 +38,8 @@
         {
           "locationWhenInUsePermission": "BimaRide AI needs your location while riding to score your trip and detect events."
         }
-      ]
+      ],
+      "expo-secure-store"
     ]
   }
 }

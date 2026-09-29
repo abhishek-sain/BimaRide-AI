@@ -1,19 +1,22 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from "expo-secure-store";
 import { API_BASE_URL } from "./config";
 
 const TOKEN_KEY = "bimaride_token";
 
 let inMemoryToken: string | null = null;
 
+// Uses the OS-encrypted keychain/keystore (SecureStore) rather than
+// AsyncStorage, which persists as plain, unencrypted text on-device — not
+// appropriate for an auth token.
 export async function setToken(token: string | null) {
   inMemoryToken = token;
-  if (token) await AsyncStorage.setItem(TOKEN_KEY, token);
-  else await AsyncStorage.removeItem(TOKEN_KEY);
+  if (token) await SecureStore.setItemAsync(TOKEN_KEY, token);
+  else await SecureStore.deleteItemAsync(TOKEN_KEY);
 }
 
 export async function loadToken(): Promise<string | null> {
   if (inMemoryToken) return inMemoryToken;
-  const stored = await AsyncStorage.getItem(TOKEN_KEY);
+  const stored = await SecureStore.getItemAsync(TOKEN_KEY);
   inMemoryToken = stored;
   return stored;
 }

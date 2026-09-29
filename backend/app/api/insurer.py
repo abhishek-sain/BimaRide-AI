@@ -1,7 +1,9 @@
 """Insurer console API — portfolio-wide read endpoints.
 
-MVP note: unauthenticated for simplicity. Before a real pilot, put these
-behind an insurer-org login/API key, separate from rider auth.
+Gated by a shared API key (require_insurer_api_key): these endpoints return
+every rider's name, location history and event data, so they must not be
+reachable anonymously. MVP-level protection — replace with a real
+insurer-org login (separate from rider auth) before a pilot.
 """
 
 from datetime import datetime, timedelta
@@ -9,12 +11,13 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.api.deps import require_insurer_api_key
 from app.core.database import get_db
 from app.models.models import Rider, RideEvent, SosAlert, Trip
 from app.schemas.schemas import PortfolioSummary, RiderSummary
 from app.services.scoring import risk_band
 
-router = APIRouter(prefix="/insurer", tags=["insurer"])
+router = APIRouter(prefix="/insurer", tags=["insurer"], dependencies=[Depends(require_insurer_api_key)])
 
 
 @router.get("/portfolio", response_model=PortfolioSummary)

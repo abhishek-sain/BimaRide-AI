@@ -67,11 +67,23 @@ sensor data.
 ```bash
 cd web-console
 npm install
-cp .env.local.example .env.local   # set API_URL to the backend
+cp .env.local.example .env.local   # set API_URL and INSURER_API_KEY to match backend/.env
 npm run dev -- --port 3001
 ```
 
 Open http://localhost:3001.
+
+### Auth / secrets
+
+- Rider-facing endpoints use JWT (`backend/.env` → `JWT_SECRET`). If unset,
+  a random secret is generated at startup (with a warning) — fine for a
+  demo, but tokens won't survive a restart and won't work across multiple
+  backend processes.
+- The insurer console's read endpoints (`/insurer/*`) require a shared key
+  sent as `x-insurer-api-key` (`backend/.env` → `INSURER_API_KEY`, mirrored
+  in `web-console/.env.local`). Same random-if-unset behaviour and warning.
+  This is a single shared secret, not per-insurer-org login — replace it
+  before a real pilot.
 
 ## Design notes / what's intentionally simplified for the MVP
 
@@ -91,8 +103,8 @@ Open http://localhost:3001.
   off) needs a native background task + platform-specific permissions
   (`ACCESS_BACKGROUND_LOCATION` etc.) — left out of this MVP; the trip must
   stay in the foreground during a ride.
-- **Insurer console has no auth** — add an insurer-org login/API key before
-  a real pilot; rider auth (JWT) is already in place.
+- **Insurer console uses one shared API key**, not per-org login — see
+  "Auth / secrets" above; add real insurer-org accounts before a pilot.
 - **SMS/call dispatch to emergency contacts is not wired to a real SMS
   gateway** — the SOS flow (detect → 15s countdown → dispatch) is fully
   implemented end-to-end, the actual `dispatched` alert would call a
