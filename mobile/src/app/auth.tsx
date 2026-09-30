@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  AppState,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -22,6 +23,16 @@ export default function AuthScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Re-hide a revealed password when the app leaves the foreground, so a
+  // plaintext password isn't left on screen in the OS app-switcher preview
+  // or captured by a background screenshot/recording.
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state !== "active") setShowPassword(false);
+    });
+    return () => sub.remove();
+  }, []);
 
   async function submit() {
     setError(null);
