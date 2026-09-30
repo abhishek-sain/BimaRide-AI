@@ -33,6 +33,10 @@ web-console/    Next.js insurer dashboard — portfolio KPIs, rider drill-down, 
 
 ## Quickstart
 
+For a more detailed, step-by-step walkthrough of starting all three
+services (including how to point the phone at your dev machine), see
+[docs/running-locally.md](docs/running-locally.md).
+
 ### 1. Backend
 
 ```bash
