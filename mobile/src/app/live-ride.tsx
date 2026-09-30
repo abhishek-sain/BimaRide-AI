@@ -26,7 +26,7 @@ export default function LiveRideScreen() {
   const recorderRef = useRef<RideRecorder | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startedAtRef = useRef<number>(0);
-  const lastPointRef = useRef<{ lat?: number; lon?: number } | null>(null);
+  const lastPointRef = useRef<{ lat?: number; lon?: number; speedKmh?: number } | null>(null);
 
   useEffect(() => {
     startRide();
@@ -53,7 +53,7 @@ export default function LiveRideScreen() {
       const recorder = new RideRecorder(trip.id, {
         onLiveUpdate: (state, point) => {
           setLiveState({ ...state });
-          if (point) lastPointRef.current = { lat: point.lat, lon: point.lon };
+          if (point) lastPointRef.current = { lat: point.lat, lon: point.lon, speedKmh: point.speed_kmh };
         },
         onNewEvent: (event) => {
           setRecentEvents((prev) => [event, ...prev].slice(0, 10));
@@ -80,6 +80,7 @@ export default function LiveRideScreen() {
         trip_id: activeTripId,
         lat: lastPointRef.current?.lat,
         lon: lastPointRef.current?.lon,
+        speed_kmh: lastPointRef.current?.speedKmh,
       });
       setSosAlertId(alert.id);
     } catch (e) {

@@ -2,9 +2,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import auth, coach, insurer, sos, trips
-from app.core.database import Base, engine
+from app.core.database import Base, engine, run_lightweight_migrations
 
 Base.metadata.create_all(bind=engine)
+run_lightweight_migrations()
 
 app = FastAPI(title="BimaRide AI", version="0.1.0")
 

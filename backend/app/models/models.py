@@ -107,9 +107,11 @@ class SosAlert(Base):
     triggered_at = Column(DateTime, default=datetime.utcnow)
     lat = Column(Float, nullable=True)
     lon = Column(Float, nullable=True)
+    speed_kmh = Column(Float, nullable=True)  # last recorded speed at trigger time, sent to emergency contacts
     confirmed_ok = Column(Boolean, nullable=True)  # None = pending, True = rider confirmed ok, False = dispatched
     resolved_at = Column(DateTime, nullable=True)
     dispatched = Column(Boolean, default=False)
+    contacts_notified = Column(Integer, default=0)  # how many emergency contacts an SMS actually went out to
 
 
 class RewardLedger(Base):

@@ -132,6 +132,7 @@ class SosTrigger(BaseModel):
     trip_id: str
     lat: Optional[float] = None
     lon: Optional[float] = None
+    speed_kmh: Optional[float] = None  # last recorded speed, included in the emergency-contact SMS
 
 
 class SosConfirm(BaseModel):
@@ -144,9 +145,16 @@ class SosOut(BaseModel):
     triggered_at: datetime
     confirmed_ok: Optional[bool] = None
     dispatched: bool
+    contacts_notified: int = 0
 
     class Config:
         from_attributes = True
+
+
+# ---------- Emergency contacts ----------
+
+class EmergencyContactsUpdate(BaseModel):
+    contacts: list[EmergencyContact]
 
 
 # ---------- Insurer console ----------

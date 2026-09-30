@@ -66,6 +66,8 @@ export const api = {
   get: <T>(path: string) => request<T>(path, { method: "GET" }),
   post: <T>(path: string, body?: unknown, auth = true) =>
     request<T>(path, { method: "POST", body, auth }),
+  put: <T>(path: string, body?: unknown, auth = true) =>
+    request<T>(path, { method: "PUT", body, auth }),
 };
 
 export { ApiError };

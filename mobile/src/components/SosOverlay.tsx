@@ -4,6 +4,11 @@ import { api } from "../api/client";
 
 const COUNTDOWN_SECONDS = 15;
 
+interface SosStatus {
+  dispatched: boolean;
+  contacts_notified: number;
+}
+
 export default function SosOverlay({
   alertId,
   onResolved,
@@ -13,12 +18,14 @@ export default function SosOverlay({
 }) {
   const [secondsLeft, setSecondsLeft] = useState(COUNTDOWN_SECONDS);
   const [dispatched, setDispatched] = useState(false);
+  const [contactsNotified, setContactsNotified] = useState(0);
   const resolvedRef = useRef(false);
 
   const dispatch = useCallback(async () => {
     resolvedRef.current = true;
     try {
-      await api.post(`/sos/${alertId}/timeout`, {});
+      const res = await api.post<SosStatus>(`/sos/${alertId}/timeout`, {});
+      setContactsNotified(res.contacts_notified);
     } catch (e) {
       console.warn(e);
     }
@@ -52,7 +59,8 @@ export default function SosOverlay({
   async function needHelp() {
     resolvedRef.current = true;
     try {
-      await api.post(`/sos/${alertId}/confirm`, { confirmed_ok: false });
+      const res = await api.post<SosStatus>(`/sos/${alertId}/confirm`, { confirmed_ok: false });
+      setContactsNotified(res.contacts_notified);
     } catch (e) {
       console.warn(e);
     }
@@ -77,9 +85,13 @@ export default function SosOverlay({
             </>
           ) : (
             <>
-              <Text style={styles.title}>Emergency contacts alerted</Text>
+              <Text style={styles.title}>
+                {contactsNotified > 0 ? "Emergency contacts alerted" : "No emergency contacts alerted"}
+              </Text>
               <Text style={styles.body}>
-                Your location and last speed have been shared with your emergency contacts.
+                {contactsNotified > 0
+                  ? `Texted your location and last speed to ${contactsNotified} emergency contact${contactsNotified === 1 ? "" : "s"}.`
+                  : "No SMS could be sent — add emergency contacts from the home screen so this works next time."}
               </Text>
               <TouchableOpacity style={styles.okButton} onPress={onResolved}>
                 <Text style={styles.okButtonText}>CLOSE</Text>

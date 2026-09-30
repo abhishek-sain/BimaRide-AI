@@ -59,6 +59,9 @@ export default function HomeScreen() {
           <Text style={styles.smallButtonText}>Rewards</Text>
         </TouchableOpacity>
       </View>
+      <TouchableOpacity style={styles.emergencyButton} onPress={() => router.push("/emergency-contacts")}>
+        <Text style={styles.emergencyButtonText}>🚨 Emergency contacts</Text>
+      </TouchableOpacity>
 
       <Text style={styles.sectionTitle}>Recent trips</Text>
       <FlatList
@@ -106,9 +109,11 @@ const styles = StyleSheet.create({
   tier: { fontSize: 14, fontWeight: "700", marginTop: 4 },
   startButton: { backgroundColor: "#22C55E", borderRadius: 16, paddingVertical: 20, alignItems: "center", marginBottom: 12 },
   startButtonText: { color: "#06210F", fontWeight: "800", fontSize: 18 },
-  rowButtons: { flexDirection: "row", gap: 12, marginBottom: 20 },
+  rowButtons: { flexDirection: "row", gap: 12, marginBottom: 12 },
   smallButton: { flex: 1, backgroundColor: "#1E2A45", borderRadius: 12, paddingVertical: 12, alignItems: "center" },
   smallButtonText: { color: "#fff", fontWeight: "600" },
+  emergencyButton: { backgroundColor: "#1E2A45", borderRadius: 12, paddingVertical: 12, alignItems: "center", marginBottom: 20 },
+  emergencyButtonText: { color: "#FCA5A5", fontWeight: "600" },
   sectionTitle: { color: "#fff", fontSize: 16, fontWeight: "700", marginBottom: 8 },
   tripRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: "#161F32", borderRadius: 12, padding: 14, marginBottom: 8 },
   tripDate: { color: "#fff", fontWeight: "600" },

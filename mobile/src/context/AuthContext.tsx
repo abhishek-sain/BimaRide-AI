@@ -8,6 +8,7 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   register: (payload: { name: string; email: string; password: string; phone?: string }) => Promise<void>;
   logout: () => Promise<void>;
+  updateEmergencyContacts: (contacts: { name: string; phone: string }[]) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -50,8 +51,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setRider(null);
   }
 
+  async function updateEmergencyContacts(contacts: { name: string; phone: string }[]) {
+    const updated = await api.put<Rider>("/auth/me/emergency-contacts", { contacts });
+    setRider(updated);
+  }
+
   return (
-    <AuthContext.Provider value={{ rider, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ rider, loading, login, register, logout, updateEmergencyContacts }}>
       {children}
     </AuthContext.Provider>
   );

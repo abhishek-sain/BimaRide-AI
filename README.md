@@ -116,7 +116,12 @@ Open http://localhost:3001.
   stay in the foreground during a ride.
 - **Insurer console uses one shared API key**, not per-org login — see
   "Auth / secrets" above; add real insurer-org accounts before a pilot.
-- **SMS/call dispatch to emergency contacts is not wired to a real SMS
-  gateway** — the SOS flow (detect → 15s countdown → dispatch) is fully
-  implemented end-to-end, the actual `dispatched` alert would call a
-  provider like Twilio in production.
+- **SMS dispatch to emergency contacts uses Twilio**, configured via
+  `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER` in
+  `backend/.env`. Riders manage up to 5 contacts from the app's home
+  screen. A crash-suspect event auto-triggers the SOS countdown with no
+  rider action; if it isn't cancelled (or the rider taps "I need help"),
+  every saved contact is texted the rider's location and last recorded
+  speed automatically. Without Twilio configured, the whole flow still
+  runs (alert recorded, countdown, dispatch), it just logs a warning and
+  sends nothing — there is no calling integration, SMS only.
