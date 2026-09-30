@@ -7,7 +7,9 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  View,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
 import { ApiError } from "../api/client";
 
@@ -17,6 +19,7 @@ export default function AuthScreen() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,7 +53,24 @@ export default function AuthScreen() {
         autoCapitalize="none"
         keyboardType="email-address"
       />
-      <TextInput style={styles.input} placeholder="Password" placeholderTextColor="#5B6577" value={password} onChangeText={setPassword} secureTextEntry />
+      <View style={styles.passwordWrap}>
+        <TextInput
+          style={styles.passwordInput}
+          placeholder="Password"
+          placeholderTextColor="#5B6577"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry={!showPassword}
+          autoCapitalize="none"
+        />
+        <TouchableOpacity
+          style={styles.eyeButton}
+          onPress={() => setShowPassword((v) => !v)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons name={showPassword ? "eye-off" : "eye"} size={20} color="#8892A6" />
+        </TouchableOpacity>
+      </View>
 
       {error && <Text style={styles.error}>{error}</Text>}
 
@@ -70,6 +90,15 @@ const styles = StyleSheet.create({
   title: { fontSize: 32, fontWeight: "800", color: "#fff", textAlign: "center" },
   subtitle: { fontSize: 14, color: "#8892A6", textAlign: "center", marginBottom: 32 },
   input: { backgroundColor: "#161F32", color: "#fff", borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 12, fontSize: 16 },
+  passwordWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#161F32",
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  passwordInput: { flex: 1, color: "#fff", paddingHorizontal: 16, paddingVertical: 14, fontSize: 16 },
+  eyeButton: { paddingHorizontal: 14, paddingVertical: 14 },
   button: { backgroundColor: "#3B82F6", borderRadius: 12, paddingVertical: 16, alignItems: "center", marginTop: 8 },
   buttonText: { color: "#fff", fontWeight: "700", fontSize: 16 },
   switch: { color: "#8892A6", textAlign: "center", marginTop: 20 },
