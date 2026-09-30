@@ -44,8 +44,15 @@ cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env   # add ANTHROPIC_API_KEY to enable real LLM coaching (optional — has a template fallback)
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
+
+`--host 0.0.0.0` is required, not optional, if the mobile app will connect
+from a phone — without it, uvicorn binds to `127.0.0.1` (localhost only)
+and is unreachable from any other device on the network, including your
+phone, even though the IP/port in `mobile/src/api/config.ts` are correct.
+This is the most common cause of the mobile app's "Something went wrong"
+on login/register.
 
 API docs at http://localhost:8000/docs. Uses SQLite by default
 (`bimaride.db`) — point `DATABASE_URL` at Postgres for anything beyond a
