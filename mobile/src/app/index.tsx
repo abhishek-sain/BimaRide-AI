@@ -32,10 +32,10 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <View>
+        <TouchableOpacity onPress={() => router.push("/profile")}>
           <Text style={styles.greeting}>Hi {rider?.name?.split(" ")[0]}</Text>
-          <Text style={styles.sub}>{rider?.bike_model ?? "Add your bike in profile"}</Text>
-        </View>
+          <Text style={styles.sub}>{rider?.bike_model ?? "Complete your profile →"}</Text>
+        </TouchableOpacity>
         <TouchableOpacity onPress={logout}>
           <Text style={styles.logout}>Log out</Text>
         </TouchableOpacity>
@@ -59,9 +59,14 @@ export default function HomeScreen() {
           <Text style={styles.smallButtonText}>Rewards</Text>
         </TouchableOpacity>
       </View>
-      <TouchableOpacity style={styles.emergencyButton} onPress={() => router.push("/emergency-contacts")}>
-        <Text style={styles.emergencyButtonText}>🚨 Emergency contacts</Text>
-      </TouchableOpacity>
+      <View style={styles.rowButtons}>
+        <TouchableOpacity style={styles.smallButton} onPress={() => router.push("/profile")}>
+          <Text style={styles.smallButtonText}>Profile</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.smallButton} onPress={() => router.push("/emergency-contacts")}>
+          <Text style={styles.smallButtonText}>Emergency contacts</Text>
+        </TouchableOpacity>
+      </View>
 
       <Text style={styles.sectionTitle}>Recent trips</Text>
       <FlatList
@@ -112,9 +117,7 @@ const styles = StyleSheet.create({
   rowButtons: { flexDirection: "row", gap: 12, marginBottom: 12 },
   smallButton: { flex: 1, backgroundColor: "#1E2A45", borderRadius: 12, paddingVertical: 12, alignItems: "center" },
   smallButtonText: { color: "#fff", fontWeight: "600" },
-  emergencyButton: { backgroundColor: "#1E2A45", borderRadius: 12, paddingVertical: 12, alignItems: "center", marginBottom: 20 },
-  emergencyButtonText: { color: "#FCA5A5", fontWeight: "600" },
-  sectionTitle: { color: "#fff", fontSize: 16, fontWeight: "700", marginBottom: 8 },
+  sectionTitle: { color: "#fff", fontSize: 16, fontWeight: "700", marginBottom: 8, marginTop: 8 },
   tripRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: "#161F32", borderRadius: 12, padding: 14, marginBottom: 8 },
   tripDate: { color: "#fff", fontWeight: "600" },
   tripMeta: { color: "#8892A6", fontSize: 12, marginTop: 2 },

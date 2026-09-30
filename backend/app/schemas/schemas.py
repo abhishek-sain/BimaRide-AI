@@ -1,18 +1,58 @@
-from datetime import datetime
+import re
+from datetime import date, datetime
 from typing import Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
+
+# E.164-ish: an optional leading '+', then 7-15 digits once separators
+# (space/dash/parens) are stripped. Rejects things like "-------" or
+# "(((((((" that the old `[0-9 ()-]{7,20}` pattern accepted — that pattern
+# had no requirement that any of the characters actually be a digit.
+_PHONE_SEPARATORS = re.compile(r"[ ()-]")
+_DIGITS_ONLY = re.compile(r"^\+?\d{7,15}$")
+
+# Real names don't need to be sentences: caps here (and on the other
+# free-text fields below) exist because this data can end up interpolated
+# into an outbound SMS (see services/notifications.py) or displayed in the
+# insurer console — unbounded input is how that becomes a way to smuggle
+# arbitrary content through, not just an inconvenience.
+NAME_MAX = 80
+FREE_TEXT_MAX = 80
+POLICY_NUMBER_MAX = 40
+ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _validate_phone(value: str) -> str:
+    stripped = _PHONE_SEPARATORS.sub("", value.strip())
+    if not _DIGITS_ONLY.match(stripped):
+        raise ValueError(f"'{value}' doesn't look like a valid phone number.")
+    return value.strip()
+
+
+def _validate_iso_date(value: str) -> str:
+    if not ISO_DATE_RE.match(value):
+        raise ValueError(f"'{value}' must be a date in YYYY-MM-DD format.")
+    try:
+        date.fromisoformat(value)
+    except ValueError:
+        raise ValueError(f"'{value}' isn't a real calendar date.")
+    return value
 
 
 # ---------- Auth ----------
 
 class RiderCreate(BaseModel):
-    name: str
+    name: str = Field(min_length=1, max_length=NAME_MAX)
     email: EmailStr
-    password: str
+    password: str = Field(min_length=8, max_length=128)
     phone: Optional[str] = None
-    bike_model: Optional[str] = None
-    city: Optional[str] = None
+    bike_model: Optional[str] = Field(default=None, max_length=FREE_TEXT_MAX)
+    city: Optional[str] = Field(default=None, max_length=FREE_TEXT_MAX)
+
+    @field_validator("phone")
+    @classmethod
+    def _phone_is_valid(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_phone(v) if v else v
 
 
 class RiderLogin(BaseModel):
@@ -26,8 +66,13 @@ class Token(BaseModel):
 
 
 class EmergencyContact(BaseModel):
-    name: str
+    name: str = Field(min_length=1, max_length=NAME_MAX)
     phone: str
+
+    @field_validator("phone")
+    @classmethod
+    def _phone_is_valid(cls, v: str) -> str:
+        return _validate_phone(v)
 
 
 class RiderOut(BaseModel):
@@ -35,12 +80,49 @@ class RiderOut(BaseModel):
     name: str
     email: EmailStr
     phone: Optional[str] = None
-    bike_model: Optional[str] = None
+    date_of_birth: Optional[str] = None
     city: Optional[str] = None
+    bike_model: Optional[str] = None
+    bike_reg_number: Optional[str] = None
+    bike_year: Optional[int] = None
+    insurer_name: Optional[str] = None
+    policy_number: Optional[str] = None
+    idv: Optional[float] = None
+    ncb_percent: Optional[float] = None
+    policy_expiry: Optional[str] = None
     emergency_contacts: list[EmergencyContact] = []
 
     class Config:
         from_attributes = True
+
+
+class ProfileUpdate(BaseModel):
+    """All fields optional and independently settable — the profile screen
+    saves whichever section the rider just edited (personal / vehicle /
+    policy) without requiring the others to be filled in first."""
+
+    name: Optional[str] = Field(default=None, min_length=1, max_length=NAME_MAX)
+    phone: Optional[str] = None
+    date_of_birth: Optional[str] = None
+    city: Optional[str] = Field(default=None, max_length=FREE_TEXT_MAX)
+    bike_model: Optional[str] = Field(default=None, max_length=FREE_TEXT_MAX)
+    bike_reg_number: Optional[str] = Field(default=None, max_length=20)
+    bike_year: Optional[int] = Field(default=None, ge=1950, le=2100)
+    insurer_name: Optional[str] = Field(default=None, max_length=FREE_TEXT_MAX)
+    policy_number: Optional[str] = Field(default=None, max_length=POLICY_NUMBER_MAX)
+    idv: Optional[float] = Field(default=None, ge=0)
+    ncb_percent: Optional[float] = Field(default=None, ge=0, le=50)
+    policy_expiry: Optional[str] = None
+
+    @field_validator("phone")
+    @classmethod
+    def _phone_is_valid(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_phone(v) if v else v
+
+    @field_validator("date_of_birth", "policy_expiry")
+    @classmethod
+    def _date_is_valid(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_iso_date(v) if v else v
 
 
 # ---------- Trips ----------

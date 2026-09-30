@@ -29,8 +29,22 @@ class Rider(Base):
     hashed_password = Column(String, nullable=False)
     phone = Column(String, nullable=True)
     emergency_contacts = Column(JSON, default=list)  # list of {name, phone}
-    bike_model = Column(String, nullable=True)
+    date_of_birth = Column(String, nullable=True)  # ISO date (YYYY-MM-DD); age is a scoring input, not just display
     city = Column(String, nullable=True)
+
+    # Vehicle — what's being insured
+    bike_model = Column(String, nullable=True)
+    bike_reg_number = Column(String, nullable=True)  # license plate / registration number
+    bike_year = Column(Integer, nullable=True)
+
+    # Insurance policy — reference info only; see services/insurance.py for
+    # why this app doesn't itself issue, price, or bind a policy.
+    insurer_name = Column(String, nullable=True)
+    policy_number = Column(String, nullable=True)
+    idv = Column(Float, nullable=True)  # Insured Declared Value, in rupees
+    ncb_percent = Column(Float, nullable=True)  # No-Claim Bonus, 0-50
+    policy_expiry = Column(String, nullable=True)  # ISO date (YYYY-MM-DD)
+
     created_at = Column(DateTime, default=datetime.utcnow)
 
     trips = relationship("Trip", back_populates="rider", cascade="all, delete-orphan")

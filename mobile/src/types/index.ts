@@ -3,9 +3,32 @@ export interface Rider {
   name: string;
   email: string;
   phone?: string;
-  bike_model?: string;
+  date_of_birth?: string;
   city?: string;
+  bike_model?: string;
+  bike_reg_number?: string;
+  bike_year?: number;
+  insurer_name?: string;
+  policy_number?: string;
+  idv?: number;
+  ncb_percent?: number;
+  policy_expiry?: string;
   emergency_contacts: { name: string; phone: string }[];
+}
+
+export interface ProfileUpdatePayload {
+  name?: string;
+  phone?: string;
+  date_of_birth?: string;
+  city?: string;
+  bike_model?: string;
+  bike_reg_number?: string;
+  bike_year?: number | null;
+  insurer_name?: string;
+  policy_number?: string;
+  idv?: number | null;
+  ncb_percent?: number | null;
+  policy_expiry?: string;
 }
 
 export interface RideEvent {

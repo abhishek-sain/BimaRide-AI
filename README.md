@@ -31,6 +31,46 @@ web-console/    Next.js insurer dashboard — portfolio KPIs, rider drill-down, 
 5. The insurer console reads the same backend to show portfolio risk,
    per-rider drill-downs, and an event heatmap.
 
+## How the insurance process works (and what this app doesn't do)
+
+**This app is a telematics and scoring layer, not an insurer.** It isn't a
+licensed insurance company, can't legally underwrite a policy, calculate a
+real premium, or handle a claim — none of that is something a hackathon
+project can do standalone, and pretending otherwise would be misleading.
+What it does do:
+
+- **Riders add their own vehicle and (if they have one) policy details** in
+  the app's **Profile** screen: personal details (phone, date of birth,
+  city), the vehicle being scored (bike model, registration number, year),
+  and reference-only policy fields (insurer name, policy number, IDV, NCB
+  %, expiry date). None of this is required to start riding and scoring —
+  it's there to make the Rider Score meaningful in an actual underwriting
+  context later, and to show alongside the score in the app and the
+  insurer console.
+- **The Rider Safety Score drives illustrative reward tiers** (see the
+  Rewards screen), exactly as pitched in the original deck: Safe Rider,
+  Good Rider, Needs Improvement, High Risk. These are shown as **what a
+  real UBI discount/loading would look like**, not an actual price — there
+  is no premium calculation engine here, and none of these numbers are
+  binding.
+- **A real policy would be issued, priced, and paid for entirely outside
+  this app**, by a licensed, IRDAI-regulated insurer. The intended
+  integration point is exactly what the insurer console already is: an
+  insurer's underwriting team sees each rider's score, event history, and
+  the vehicle/policy reference data, and applies it to whatever their own
+  policy administration system does — adjusting a renewal premium,
+  approving a reward, flagging a rider for review. This app produces the
+  signal; a licensed insurer's own systems would be the one to act on it
+  for real money.
+- **Claims aren't handled here either.** A crash-suspect event and its
+  telemetry are recorded and could support a real claim (that's the
+  "faster claims" pitch in the deck), but filing, adjudicating, and paying
+  a claim is entirely the insurer's process, not this app's.
+
+In short: the app captures the data an insurer would want, computes the
+signal that would drive pricing, and shows both to an insurer's team to
+act on — it never itself becomes the insurer.
+
 ## Quickstart
 
 For a more detailed, step-by-step walkthrough of starting all three

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { api, loadToken, setToken } from "../api/client";
-import { Rider } from "../types";
+import { ProfileUpdatePayload, Rider } from "../types";
 
 interface AuthContextValue {
   rider: Rider | null;
@@ -9,6 +9,7 @@ interface AuthContextValue {
   register: (payload: { name: string; email: string; password: string; phone?: string }) => Promise<void>;
   logout: () => Promise<void>;
   updateEmergencyContacts: (contacts: { name: string; phone: string }[]) => Promise<void>;
+  updateProfile: (payload: ProfileUpdatePayload) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -56,8 +57,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setRider(updated);
   }
 
+  async function updateProfile(payload: ProfileUpdatePayload) {
+    const updated = await api.put<Rider>("/auth/me", payload);
+    setRider(updated);
+  }
+
   return (
-    <AuthContext.Provider value={{ rider, loading, login, register, logout, updateEmergencyContacts }}>
+    <AuthContext.Provider
+      value={{ rider, loading, login, register, logout, updateEmergencyContacts, updateProfile }}
+    >
       {children}
     </AuthContext.Provider>
   );

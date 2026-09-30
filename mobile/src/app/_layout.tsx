@@ -44,6 +44,8 @@ export default function RootLayout() {
             <Stack.Screen name="trip/[tripId]" />
             <Stack.Screen name="coach" />
             <Stack.Screen name="rewards" />
+            <Stack.Screen name="profile" />
+            <Stack.Screen name="emergency-contacts" />
           </Stack>
         </Gate>
       </AuthProvider>

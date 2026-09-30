@@ -19,6 +19,7 @@ flag) still works in a demo with no Twilio account.
 from __future__ import annotations
 
 import logging
+import re
 
 import httpx
 
@@ -27,6 +28,25 @@ from app.core.config import settings
 logger = logging.getLogger("bimaride.notifications")
 
 TWILIO_MESSAGES_URL = "https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json"
+
+# rider.name is set by the rider at registration with no format restriction
+# and is interpolated straight into an SMS sent to third-party phone
+# numbers under the "BimaRide AI SOS" banner. Without sanitizing it, a rider
+# could pick a name designed to make the message read as something other
+# than a crash alert (extra sentences, a phishing link, control characters)
+# and use their own "emergency contacts" list as a way to push that content
+# to arbitrary numbers. Collapsing whitespace/control characters and
+# capping the length keeps the name a name, not a message body.
+_CONTROL_OR_NEWLINE = re.compile(r"[\r\n\t\x00-\x1f\x7f]+")
+MAX_NAME_IN_SMS = 40
+
+
+def _sanitize_name_for_sms(name: str) -> str:
+    cleaned = _CONTROL_OR_NEWLINE.sub(" ", name).strip()
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    if len(cleaned) > MAX_NAME_IN_SMS:
+        cleaned = cleaned[:MAX_NAME_IN_SMS].rstrip() + "…"
+    return cleaned or "A BimaRide AI rider"
 
 
 def _configured() -> bool:
@@ -63,7 +83,8 @@ def send_sms(to: str, body: str) -> bool:
 
 
 def build_sos_message(rider_name: str, lat: float | None, lon: float | None, speed_kmh: float | None) -> str:
-    parts = [f"BimaRide AI SOS: {rider_name} may have been in a crash."]
+    safe_name = _sanitize_name_for_sms(rider_name)
+    parts = [f"BimaRide AI SOS: {safe_name} may have been in a crash."]
     if lat is not None and lon is not None:
         parts.append(f"Location: https://maps.google.com/?q={lat},{lon}")
     if speed_kmh is not None:
