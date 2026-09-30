@@ -11,6 +11,13 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 _PHONE_SEPARATORS = re.compile(r"[ ()-]")
 _DIGITS_ONLY = re.compile(r"^\+?\d{7,15}$")
 
+# Emergency contacts specifically must include a country code. A local
+# 10-digit number like "7066115366" passes the looser check above but
+# Twilio has no way to know which country it belongs to and will either
+# reject it or misroute it — an SMS that silently never arrives is worse
+# than a validation error at save time.
+_E164_STRICT = re.compile(r"^\+\d{8,15}$")
+
 # Real names don't need to be sentences: caps here (and on the other
 # free-text fields below) exist because this data can end up interpolated
 # into an outbound SMS (see services/notifications.py) or displayed in the
@@ -27,6 +34,16 @@ def _validate_phone(value: str) -> str:
     if not _DIGITS_ONLY.match(stripped):
         raise ValueError(f"'{value}' doesn't look like a valid phone number.")
     return value.strip()
+
+
+def _validate_emergency_phone(value: str) -> str:
+    stripped = _PHONE_SEPARATORS.sub("", value.strip())
+    if not _E164_STRICT.match(stripped):
+        raise ValueError(
+            f"'{value}' needs a country code to work as an emergency contact, "
+            f"e.g. +91 70661 15366 for India or +1 555 123 4567 for the US."
+        )
+    return stripped
 
 
 def _validate_iso_date(value: str) -> str:
@@ -72,7 +89,7 @@ class EmergencyContact(BaseModel):
     @field_validator("phone")
     @classmethod
     def _phone_is_valid(cls, v: str) -> str:
-        return _validate_phone(v)
+        return _validate_emergency_phone(v)
 
 
 class RiderOut(BaseModel):
