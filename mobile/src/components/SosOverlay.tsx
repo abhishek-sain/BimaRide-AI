@@ -27,13 +27,6 @@ export default function SosOverlay({
   const status = useAudioPlayerStatus(player);
   const soundStartedRef = useRef(false);
 
-  // expo-audio's AudioPlayer is an imperative, native-backed handle — setting
-  // `.loop`/`.volume` and calling `.play()`/`.pause()` is its documented API,
-  // not React-managed state. react-hooks/immutability doesn't know that and
-  // flags any mutation of a hook's return value, so it's disabled for this
-  // whole effect rather than chased across every call site it reports from.
-  /* eslint-disable react-hooks/immutability */
-
   // useAudioPlayer loads the file asynchronously — calling .play() right
   // after creating the player is a race that can silently do nothing if the
   // file hasn't finished loading yet, which is exactly why only the
@@ -67,31 +60,49 @@ export default function SosOverlay({
 
     autoStopRef.current = setTimeout(() => {
       Vibration.cancel();
-      player.pause();
+      safePause();
       setStopped(true);
     }, ALERT_DURATION_MS);
 
     return () => {
-      // Belt-and-braces: cancel on unmount too, in case the screen is torn
-      // down (e.g. navigating away) before either stop path runs — a
-      // vibration or sound left running with no matching stop would
-      // otherwise outlive this component and keep buzzing/blaring forever.
+      // Belt-and-braces: cancel vibration on unmount too, in case the screen
+      // is torn down (e.g. navigating away) before either stop path runs —
+      // a vibration left running with no matching cancel would otherwise
+      // outlive this component and keep buzzing forever.
+      //
+      // Deliberately NOT calling player.pause() here: useAudioPlayer
+      // releases its native player as part of its own unmount cleanup, and
+      // calling .pause() on it from this cleanup races that release —
+      // depending on cleanup order, this pause() can land on an
+      // already-released native object and crash with "Cannot use shared
+      // object that was already released." Unmounting the player already
+      // stops the sound; there's nothing left for us to pause.
       Vibration.cancel();
-      player.pause();
       if (countdownRef.current) clearInterval(countdownRef.current);
       if (autoStopRef.current) clearTimeout(autoStopRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Guards every other pause() call against the same class of race — e.g. a
+  // double-tap on the stop button, or the auto-stop timer firing in the
+  // narrow window around a teardown — none of which should ever crash the
+  // UI over a sound that's already stopped or stopping.
+  function safePause() {
+    try {
+      player.pause();
+    } catch (e) {
+      console.warn("SOS alarm pause() failed (likely already stopped):", e);
+    }
+  }
+
   function stopNow() {
     Vibration.cancel();
-    player.pause();
+    safePause();
     if (countdownRef.current) clearInterval(countdownRef.current);
     if (autoStopRef.current) clearTimeout(autoStopRef.current);
     setStopped(true);
   }
-  /* eslint-enable react-hooks/immutability */
 
   const mm = String(Math.floor(secondsLeft / 60)).padStart(2, "0");
   const ss = String(secondsLeft % 60).padStart(2, "0");
