@@ -1,7 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Modal, StyleSheet, Text, TouchableOpacity, Vibration, View } from "react-native";
+import { setAudioModeAsync, useAudioPlayer } from "expo-audio";
 
-const VIBRATE_DURATION_MS = 60_000; // 1 minute
+const ALARM_SOUND = require("../../assets/audio/sos-alarm.wav");
+
+const ALERT_DURATION_MS = 60_000; // 1 minute
 // 800ms buzz / 400ms pause, repeated. Android honors the custom duration;
 // iOS always does a fixed ~400ms buzz per cycle regardless of the number
 // given — on both platforms this reads as a continuous, attention-grabbing
@@ -17,11 +20,27 @@ export default function SosOverlay({
   onResolved: () => void;
 }) {
   const [stopped, setStopped] = useState(false);
-  const [secondsLeft, setSecondsLeft] = useState(VIBRATE_DURATION_MS / 1000);
+  const [secondsLeft, setSecondsLeft] = useState(ALERT_DURATION_MS / 1000);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoStopRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const player = useAudioPlayer(ALARM_SOUND);
 
+  // expo-audio's AudioPlayer is an imperative, native-backed handle — setting
+  // `.loop` and calling `.play()`/`.pause()` is its documented API, not
+  // React-managed state. react-hooks/immutability doesn't know that and
+  // flags any mutation of a hook's return value, so it's disabled for this
+  // whole effect rather than chased across every call site it reports from.
+  /* eslint-disable react-hooks/immutability */
   useEffect(() => {
+    (async () => {
+      // Without this, iOS silently mutes the siren if the phone's physical
+      // silent switch is on — exactly the moment an emergency alert most
+      // needs to be audible.
+      await setAudioModeAsync({ playsInSilentMode: true, interruptionMode: "doNotMix" });
+      player.loop = true;
+      player.play();
+    })();
+
     Vibration.vibrate(VIBRATE_PATTERN, true);
 
     countdownRef.current = setInterval(() => {
@@ -30,26 +49,31 @@ export default function SosOverlay({
 
     autoStopRef.current = setTimeout(() => {
       Vibration.cancel();
+      player.pause();
       setStopped(true);
-    }, VIBRATE_DURATION_MS);
+    }, ALERT_DURATION_MS);
 
     return () => {
       // Belt-and-braces: cancel on unmount too, in case the screen is torn
       // down (e.g. navigating away) before either stop path runs — a
-      // vibration call with no matching cancel would otherwise outlive
-      // this component and keep buzzing the phone indefinitely.
+      // vibration or sound left running with no matching stop would
+      // otherwise outlive this component and keep buzzing/blaring forever.
       Vibration.cancel();
+      player.pause();
       if (countdownRef.current) clearInterval(countdownRef.current);
       if (autoStopRef.current) clearTimeout(autoStopRef.current);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function stopNow() {
     Vibration.cancel();
+    player.pause();
     if (countdownRef.current) clearInterval(countdownRef.current);
     if (autoStopRef.current) clearTimeout(autoStopRef.current);
     setStopped(true);
   }
+  /* eslint-enable react-hooks/immutability */
 
   const mm = String(Math.floor(secondsLeft / 60)).padStart(2, "0");
   const ss = String(secondsLeft % 60).padStart(2, "0");
@@ -67,15 +91,16 @@ export default function SosOverlay({
                 {mm}:{ss}
               </Text>
               <Text style={styles.body}>
-                Your phone will keep vibrating for up to a minute to get your attention, or anyone nearby&apos;s.
+                Your phone will keep vibrating and sounding an alarm for up to a minute to get your attention, or
+                anyone nearby&apos;s.
               </Text>
               <TouchableOpacity style={styles.stopButton} onPress={stopNow}>
-                <Text style={styles.stopButtonText}>I&apos;M OK — STOP VIBRATING</Text>
+                <Text style={styles.stopButtonText}>I&apos;M OK — STOP ALERT</Text>
               </TouchableOpacity>
             </>
           ) : (
             <>
-              <Text style={styles.title}>Vibration stopped</Text>
+              <Text style={styles.title}>Alert stopped</Text>
               <Text style={styles.body}>Glad you&apos;re OK.</Text>
               <TouchableOpacity style={styles.stopButton} onPress={onResolved}>
                 <Text style={styles.stopButtonText}>CLOSE</Text>
