@@ -1,3 +1,5 @@
+import secrets
+import string
 import uuid
 from datetime import datetime
 
@@ -18,6 +20,16 @@ from app.core.database import Base
 
 def gen_id() -> str:
     return uuid.uuid4().hex
+
+
+_CONNECT_CODE_ALPHABET = string.ascii_uppercase + string.digits
+# Excludes visually-ambiguous characters (0/O, 1/I/L) since this code is
+# meant to be read aloud or typed by hand between two people pairing up.
+_CONNECT_CODE_ALPHABET = "".join(c for c in _CONNECT_CODE_ALPHABET if c not in "01OIL")
+
+
+def gen_connect_code() -> str:
+    return "".join(secrets.choice(_CONNECT_CODE_ALPHABET) for _ in range(8))
 
 
 class Rider(Base):
@@ -45,9 +57,58 @@ class Rider(Base):
     ncb_percent = Column(Float, nullable=True)  # No-Claim Bonus, 0-50
     policy_expiry = Column(String, nullable=True)  # ISO date (YYYY-MM-DD)
 
+    # Pairing with emergency-contact accounts (see ContactUser/Connection)
+    # and push delivery for ride-start pings and crash alerts.
+    connect_code = Column(String, unique=True, nullable=False, default=gen_connect_code)
+    push_token = Column(String, nullable=True)  # Expo push token for this device
+
     created_at = Column(DateTime, default=datetime.utcnow)
 
     trips = relationship("Trip", back_populates="rider", cascade="all, delete-orphan")
+    connections = relationship("Connection", back_populates="rider", cascade="all, delete-orphan")
+
+
+class ContactUser(Base):
+    """An Emergency Contact Person's own account. Deliberately a separate
+    table from Rider rather than a 'role' flag on one shared table: a
+    contact has none of the rider-specific scoring/vehicle/policy fields,
+    and keeping them separate meant this feature could be added without
+    touching any existing rider/trip/scoring code."""
+
+    __tablename__ = "contact_users"
+
+    id = Column(String, primary_key=True, default=gen_id)
+    name = Column(String, nullable=False)
+    email = Column(String, unique=True, nullable=False, index=True)
+    hashed_password = Column(String, nullable=False)
+    phone = Column(String, nullable=True)
+    connect_code = Column(String, unique=True, nullable=False, default=gen_connect_code)
+    push_token = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    connections = relationship("Connection", back_populates="contact", cascade="all, delete-orphan")
+
+
+class Connection(Base):
+    """A pairing between a Rider and a ContactUser. Either side can send
+    the request (by entering the other's connect_code); it only starts
+    sharing live location / crash alerts once the other side accepts —
+    an unconfirmed one-way add would let anyone who sees a leaked code
+    start receiving a stranger's live location, which is exactly the kind
+    of thing this feature exists to protect against, not enable."""
+
+    __tablename__ = "connections"
+
+    id = Column(String, primary_key=True, default=gen_id)
+    rider_id = Column(String, ForeignKey("riders.id"), nullable=False)
+    contact_id = Column(String, ForeignKey("contact_users.id"), nullable=False)
+    status = Column(String, default="pending")  # pending | accepted
+    requested_by = Column(String, nullable=False)  # "rider" | "contact" — who sent the request
+    created_at = Column(DateTime, default=datetime.utcnow)
+    accepted_at = Column(DateTime, nullable=True)
+
+    rider = relationship("Rider", back_populates="connections")
+    contact = relationship("ContactUser", back_populates="connections")
 
 
 class Trip(Base):

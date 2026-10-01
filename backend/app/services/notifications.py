@@ -18,14 +18,14 @@ flag) still works in a demo with no Twilio account.
 
 from __future__ import annotations
 
-import logging
 import re
 
 import httpx
 
 from app.core.config import settings
+from app.core.logging_utils import get_logger
 
-logger = logging.getLogger("bimaride.notifications")
+logger = get_logger("bimaride.notifications")
 
 TWILIO_MESSAGES_URL = "https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json"
 

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_rider
 from app.core.database import get_db
-from app.models.models import Rider, RewardLedger, RideEvent, Trip, TripPoint
+from app.models.models import Connection, Rider, RewardLedger, RideEvent, Trip, TripPoint
 from app.schemas.schemas import (
     RideEventOut,
     TripOut,
@@ -13,6 +13,7 @@ from app.schemas.schemas import (
     TripStart,
 )
 from app.services.events import detect_events
+from app.services.push import send_expo_push
 from app.services.road_risk import accident_history_score, road_risk_score
 from app.services.scoring import compute_trip_score, reward_tier
 
@@ -144,6 +145,24 @@ def end_trip(trip_id: str, db: Session = Depends(get_db), rider: Rider = Depends
 
     db.commit()
     db.refresh(trip)
+
+    # A crash-flagged trip already got its own, more urgent push from
+    # POST /trips/{id}/crash-alert the moment it was detected — sending a
+    # second "completed safely" push for the same trip here would be
+    # actively confusing, so this is only the reassurance case.
+    if trip.status == "completed":
+        contact_tokens = [
+            c.contact.push_token
+            for c in db.query(Connection).filter(Connection.rider_id == rider.id, Connection.status == "accepted").all()
+            if c.contact.push_token
+        ]
+        send_expo_push(
+            contact_tokens,
+            title="Ride completed",
+            body=f"{rider.name} completed their ride safely. Score: {round(breakdown.total)}.",
+            data={"type": "ride_end", "trip_id": trip.id, "rider_id": rider.id, "rider_name": rider.name},
+        )
+
     return trip
 
 

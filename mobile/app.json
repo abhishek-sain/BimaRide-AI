@@ -40,7 +40,14 @@
         }
       ],
       "expo-secure-store",
-      "expo-audio"
+      "expo-audio",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#EF4444"
+        }
+      ]
     ]
   }
 }

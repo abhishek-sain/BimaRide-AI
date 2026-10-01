@@ -128,6 +128,7 @@ class RiderOut(BaseModel):
     idv: Optional[float] = None
     ncb_percent: Optional[float] = None
     policy_expiry: Optional[str] = None
+    connect_code: str
     emergency_contacts: list[EmergencyContactOut] = []
 
     class Config:
@@ -297,3 +298,82 @@ class RiderSummary(BaseModel):
     harsh_braking_30d: int
     overspeed_30d: int
     crash_events_30d: int
+
+
+# ---------- Emergency Contact Person accounts ----------
+
+class ContactUserCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=NAME_MAX)
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+    phone: Optional[str] = None
+
+    @field_validator("phone")
+    @classmethod
+    def _phone_is_valid(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_phone(v) if v else v
+
+
+class ContactUserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class ContactUserOut(BaseModel):
+    id: str
+    name: str
+    email: EmailStr
+    phone: Optional[str] = None
+    connect_code: str
+
+    class Config:
+        from_attributes = True
+
+
+# ---------- Pairing ----------
+
+class ConnectionRequestIn(BaseModel):
+    code: str = Field(min_length=4, max_length=16)
+
+
+class ConnectionActionOut(BaseModel):
+    id: str
+    status: str  # pending | accepted
+    requested_by: str  # "rider" | "contact"
+    rider_id: str
+    rider_name: str
+    contact_id: str
+    contact_name: str
+    created_at: datetime
+    accepted_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class PushTokenUpdate(BaseModel):
+    push_token: str = Field(min_length=1, max_length=255)
+
+
+# ---------- Ride-start ping & live location ----------
+
+class RideNotifyOut(BaseModel):
+    notified: int  # how many connected, accepted contacts were pushed
+
+
+class LiveLocationIn(BaseModel):
+    lat: float
+    lon: float
+    speed_kmh: Optional[float] = None
+
+
+# ---------- Crash alert dispatch to connected contacts ----------
+
+class CrashAlertIn(BaseModel):
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+    speed_kmh: Optional[float] = None
+
+
+class CrashAlertOut(BaseModel):
+    notified: int  # how many connected, accepted contacts were pushed

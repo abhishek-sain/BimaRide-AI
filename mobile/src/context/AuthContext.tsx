@@ -1,6 +1,18 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { api, loadToken, setToken } from "../api/client";
+import { registerForPushNotificationsAsync } from "../services/pushNotifications";
 import { ProfileUpdatePayload, Rider } from "../types";
+
+async function registerPushToken() {
+  const pushToken = await registerForPushNotificationsAsync();
+  if (pushToken) {
+    try {
+      await api.put("/auth/me/push-token", { push_token: pushToken });
+    } catch (e) {
+      console.warn("Could not save push token:", e);
+    }
+  }
+}
 
 interface AuthContextValue {
   rider: Rider | null;
@@ -39,12 +51,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const res = await api.post<{ access_token: string }>("/auth/login", { email, password }, false);
     await setToken(res.access_token);
     await fetchMe();
+    registerPushToken(); // fire-and-forget: a rider without push set up can still do everything else
   }
 
   async function register(payload: { name: string; email: string; password: string; phone?: string }) {
     const res = await api.post<{ access_token: string }>("/auth/register", payload, false);
     await setToken(res.access_token);
     await fetchMe();
+    registerPushToken();
   }
 
   async function logout() {

@@ -4,10 +4,12 @@ import { FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } fr
 import { api } from "../api/client";
 import { Trip } from "../types";
 import { useAuth } from "../context/AuthContext";
+import { useRole } from "../context/RoleContext";
 import { tierLabel, tierColor } from "../services/tiers";
 
 export default function HomeScreen() {
   const { rider, logout } = useAuth();
+  const { clearRole } = useRole();
   const router = useRouter();
   const [trips, setTrips] = useState<Trip[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -36,7 +38,13 @@ export default function HomeScreen() {
           <Text style={styles.greeting}>Hi {rider?.name?.split(" ")[0]}</Text>
           <Text style={styles.sub}>{rider?.bike_model ?? "Complete your profile →"}</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={logout}>
+        <TouchableOpacity
+          onPress={async () => {
+            await logout();
+            await clearRole();
+            router.replace("/choose-role");
+          }}
+        >
           <Text style={styles.logout}>Log out</Text>
         </TouchableOpacity>
       </View>
@@ -63,8 +71,8 @@ export default function HomeScreen() {
         <TouchableOpacity style={styles.smallButton} onPress={() => router.push("/profile")}>
           <Text style={styles.smallButtonText}>Profile</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.smallButton} onPress={() => router.push("/emergency-contacts")}>
-          <Text style={styles.smallButtonText}>Emergency contacts</Text>
+        <TouchableOpacity style={styles.smallButton} onPress={() => router.push("/connect")}>
+          <Text style={styles.smallButtonText}>Emergency contact</Text>
         </TouchableOpacity>
       </View>
 

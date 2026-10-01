@@ -26,10 +26,63 @@ web-console/    Next.js insurer dashboard — portfolio KPIs, rider drill-down, 
 3. When the trip ends, the backend computes the final Rider Safety Score
    (weighted, per-100km normalised, matching the original deck's formula),
    flags rewards, and stores everything for the insurer console.
-4. A crash-suspect event triggers a 15-second "Are you OK?" countdown in the
-   app; no response (or a manual "I need help") marks the SOS as dispatched.
+4. A crash-suspect event (or the manual SOS button) makes the rider's own
+   phone vibrate and sound an alarm continuously for up to a minute, and —
+   if they've paired with an Emergency Contact Person — pushes a crash
+   alert to that person's phone too, with the rider's location. See
+   "Emergency contacts" below for the full picture.
 5. The insurer console reads the same backend to show portfolio risk,
    per-rider drill-downs, and an event heatmap.
+
+## Emergency contacts: two account types, paired by code
+
+There are two kinds of accounts: **Rider** and **Emergency Contact
+Person**. Both register in the same app (a role picker on first launch)
+and pair up by sharing an 8-character connect code — either side can send
+the request, but nothing is shared until the **other** side accepts. An
+unconfirmed one-way add would let anyone who sees a leaked code start
+watching a stranger's live location, which is exactly what requiring
+mutual acceptance prevents.
+
+Once paired:
+
+- **One-tap ride-start ping.** The rider taps "Notify emergency contact"
+  on the live-ride screen; every accepted contact gets a push notification.
+- **Live location while riding.** The rider's app streams GPS fixes over a
+  WebSocket (`/ws/trip/{id}`) to every connected contact currently viewing
+  the live map — a real-time relay, not polling, and separate from the
+  REST-ingested points used for scoring.
+- **Crash alerts.** The same crash-suspect detection that triggers the
+  rider's own phone alarm also calls `POST /trips/{id}/crash-alert`, which
+  pushes an alert — with the crash location and last recorded speed — to
+  every connected contact. Tapping it (or just having the app open) opens
+  a full-screen alert with a map pin and the **same continuous
+  vibrate+siren alarm** the rider gets, with a manual stop button.
+- **Ride-completed reassurance.** When a trip ends safely (not
+  crash-flagged), contacts get a quieter "completed their ride safely"
+  push — peace of mind on the common case, not just the emergency one.
+
+**The one real platform limitation, stated plainly:** a push notification
+reliably triggers a sound + vibration the instant it arrives, even with
+the recipient's app fully closed, because the OS delivers it, not the app.
+What a standard push **cannot** do on either platform without a custom
+native build is ring indefinitely like an incoming phone call — that
+needs iOS CallKit/VoIP-push (a special Apple entitlement, approved
+case-by-case) or an Android full-screen-intent call UI, neither available
+in Expo Go. This app sends the strongest alert Expo's push API supports
+and starts the full continuous alarm the moment the contact's app is
+actually open (by tap or by being foregrounded already) — a very loud,
+vibrating, impossible-to-miss notification on arrival, not an
+indefinitely-ringing phone call.
+
+**Also worth knowing:** push notifications require a development build,
+not Expo Go, from Expo SDK 53 onward. Every other feature in this app
+(pairing, live map, crash-alert screen, the alarm itself once opened)
+works in Expo Go; only the "deliver a push while the app is closed" piece
+needs `eas build --profile development` (or `npx expo run:android` /
+`run:ios`) plus an EAS project (`eas init`). Push registration fails
+silently (logs a warning, doesn't crash) when running in Expo Go, so
+development isn't blocked on this.
 
 ## How the insurance process works (and what this app doesn't do)
 
@@ -156,12 +209,13 @@ Open http://localhost:3001.
   stay in the foreground during a ride.
 - **Insurer console uses one shared API key**, not per-org login — see
   "Auth / secrets" above; add real insurer-org accounts before a pilot.
-- **SMS dispatch to emergency contacts uses Twilio**, configured via
-  `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER` in
-  `backend/.env`. Riders manage up to 5 contacts from the app's home
-  screen. A crash-suspect event auto-triggers the SOS countdown with no
-  rider action; if it isn't cancelled (or the rider taps "I need help"),
-  every saved contact is texted the rider's location and last recorded
-  speed automatically. Without Twilio configured, the whole flow still
-  runs (alert recorded, countdown, dispatch), it just logs a warning and
-  sends nothing — there is no calling integration, SMS only.
+- **Emergency alerts now go through paired accounts + push notifications**
+  (see "Emergency contacts" above), not SMS. The original Twilio-based
+  design (`backend/app/services/notifications.py`, `backend/app/api/sos.py`,
+  the phone-number-only `emergency-contacts.tsx` screen) is still in the
+  codebase and still works, but it's dormant — nothing in the current
+  mobile flow calls it. It's a reasonable fallback to revive for a contact
+  who'd rather get a plain SMS than install the app, but that's future
+  work, not wired up today.
+- **No calling integration anywhere** — SMS or push, this app only ever
+  sends a text/notification, never places a phone call.

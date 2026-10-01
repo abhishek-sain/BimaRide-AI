@@ -13,7 +13,28 @@ export interface Rider {
   idv?: number;
   ncb_percent?: number;
   policy_expiry?: string;
+  connect_code: string;
   emergency_contacts: { name: string; phone: string }[];
+}
+
+export interface ContactUser {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  connect_code: string;
+}
+
+export interface Connection {
+  id: string;
+  status: "pending" | "accepted";
+  requested_by: "rider" | "contact";
+  rider_id: string;
+  rider_name: string;
+  contact_id: string;
+  contact_name: string;
+  created_at: string;
+  accepted_at?: string;
 }
 
 export interface ProfileUpdatePayload {

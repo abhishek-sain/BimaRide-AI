@@ -5,7 +5,15 @@ from app.api.deps import get_current_rider
 from app.core.database import get_db
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models.models import Rider
-from app.schemas.schemas import EmergencyContactsUpdate, ProfileUpdate, RiderCreate, RiderLogin, RiderOut, Token
+from app.schemas.schemas import (
+    EmergencyContactsUpdate,
+    ProfileUpdate,
+    PushTokenUpdate,
+    RiderCreate,
+    RiderLogin,
+    RiderOut,
+    Token,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -97,6 +105,22 @@ def update_emergency_contacts(
             raise HTTPException(status_code=400, detail="Each contact needs a name.")
 
     rider.emergency_contacts = [{"name": c.name.strip(), "phone": c.phone.strip()} for c in payload.contacts]
+    db.commit()
+    db.refresh(rider)
+    return rider
+
+
+@router.put("/me/push-token", response_model=RiderOut)
+def update_push_token(
+    payload: PushTokenUpdate,
+    db: Session = Depends(get_db),
+    rider: Rider = Depends(get_current_rider),
+):
+    """Saves this device's Expo push token — not used to alert emergency
+    contacts (that's the contact's OWN push token, registered via
+    contacts_auth.py), but to push to the rider themselves, e.g. when a
+    contact accepts their connection request."""
+    rider.push_token = payload.push_token
     db.commit()
     db.refresh(rider)
     return rider
