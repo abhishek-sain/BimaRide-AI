@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Modal, StyleSheet, Text, TouchableOpacity, Vibration, View } from "react-native";
-import { setAudioModeAsync, useAudioPlayer } from "expo-audio";
+import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 
 const ALARM_SOUND = require("../../assets/audio/sos-alarm.wav");
 
@@ -24,23 +24,41 @@ export default function SosOverlay({
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoStopRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const player = useAudioPlayer(ALARM_SOUND);
+  const status = useAudioPlayerStatus(player);
+  const soundStartedRef = useRef(false);
 
   // expo-audio's AudioPlayer is an imperative, native-backed handle — setting
-  // `.loop` and calling `.play()`/`.pause()` is its documented API, not
-  // React-managed state. react-hooks/immutability doesn't know that and
+  // `.loop`/`.volume` and calling `.play()`/`.pause()` is its documented API,
+  // not React-managed state. react-hooks/immutability doesn't know that and
   // flags any mutation of a hook's return value, so it's disabled for this
   // whole effect rather than chased across every call site it reports from.
   /* eslint-disable react-hooks/immutability */
-  useEffect(() => {
-    (async () => {
-      // Without this, iOS silently mutes the siren if the phone's physical
-      // silent switch is on — exactly the moment an emergency alert most
-      // needs to be audible.
-      await setAudioModeAsync({ playsInSilentMode: true, interruptionMode: "doNotMix" });
-      player.loop = true;
-      player.play();
-    })();
 
+  // useAudioPlayer loads the file asynchronously — calling .play() right
+  // after creating the player is a race that can silently do nothing if the
+  // file hasn't finished loading yet, which is exactly why only the
+  // vibration was ever firing. Starting playback once status.isLoaded
+  // flips true (guarded so it only fires once) avoids that race.
+  useEffect(() => {
+    if (status.error) {
+      console.warn("SOS alarm sound failed to load:", status.error);
+      return;
+    }
+    if (status.isLoaded && !soundStartedRef.current) {
+      soundStartedRef.current = true;
+      (async () => {
+        // Without this, iOS silently mutes the siren if the phone's physical
+        // silent switch is on — exactly the moment an emergency alert most
+        // needs to be audible.
+        await setAudioModeAsync({ playsInSilentMode: true, interruptionMode: "doNotMix" });
+        player.loop = true;
+        player.volume = 1.0;
+        player.play();
+      })();
+    }
+  }, [status.isLoaded, status.error, player]);
+
+  useEffect(() => {
     Vibration.vibrate(VIBRATE_PATTERN, true);
 
     countdownRef.current = setInterval(() => {
