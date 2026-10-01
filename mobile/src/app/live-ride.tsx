@@ -22,71 +22,54 @@ export default function LiveRideScreen() {
   const [liveState, setLiveState] = useState<LiveState>(emptyState());
   const [recentEvents, setRecentEvents] = useState<LocalEvent[]>([]);
   const [elapsed, setElapsed] = useState(0);
-  const [sosAlertId, setSosAlertId] = useState<string | null>(null);
+  const [sosReason, setSosReason] = useState<"crash" | "manual" | null>(null);
   const recorderRef = useRef<RideRecorder | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startedAtRef = useRef<number>(0);
-  const lastPointRef = useRef<{ lat?: number; lon?: number; speedKmh?: number } | null>(null);
 
   useEffect(() => {
-    startRide();
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Location required", "BimaRide needs location access to score your ride.");
+          router.back();
+          return;
+        }
+
+        const trip = await api.post<Trip>("/trips", {});
+        setTripId(trip.id);
+        startedAtRef.current = Date.now();
+
+        const recorder = new RideRecorder(trip.id, {
+          onLiveUpdate: (state) => {
+            setLiveState({ ...state });
+          },
+          onNewEvent: (event) => {
+            setRecentEvents((prev) => [event, ...prev].slice(0, 10));
+          },
+          onCrashSuspected: () => {
+            setSosReason("crash");
+          },
+        });
+        recorderRef.current = recorder;
+        await recorder.start();
+
+        timerRef.current = setInterval(() => {
+          setElapsed(Math.floor((Date.now() - startedAtRef.current) / 1000));
+        }, 1000);
+      } catch (e: any) {
+        Alert.alert("Could not start ride", e.message ?? String(e));
+        router.back();
+      }
+    })();
+
     return () => {
       recorderRef.current?.stop();
       if (timerRef.current) clearInterval(timerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  async function startRide() {
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert("Location required", "BimaRide needs location access to score your ride.");
-        router.back();
-        return;
-      }
-
-      const trip = await api.post<Trip>("/trips", {});
-      setTripId(trip.id);
-      startedAtRef.current = Date.now();
-
-      const recorder = new RideRecorder(trip.id, {
-        onLiveUpdate: (state, point) => {
-          setLiveState({ ...state });
-          if (point) lastPointRef.current = { lat: point.lat, lon: point.lon, speedKmh: point.speed_kmh };
-        },
-        onNewEvent: (event) => {
-          setRecentEvents((prev) => [event, ...prev].slice(0, 10));
-        },
-        onCrashSuspected: () => {
-          triggerSos(trip.id);
-        },
-      });
-      recorderRef.current = recorder;
-      await recorder.start();
-
-      timerRef.current = setInterval(() => {
-        setElapsed(Math.floor((Date.now() - startedAtRef.current) / 1000));
-      }, 1000);
-    } catch (e: any) {
-      Alert.alert("Could not start ride", e.message ?? String(e));
-      router.back();
-    }
-  }
-
-  async function triggerSos(activeTripId: string) {
-    try {
-      const alert = await api.post<{ id: string }>("/sos/trigger", {
-        trip_id: activeTripId,
-        lat: lastPointRef.current?.lat,
-        lon: lastPointRef.current?.lon,
-        speed_kmh: lastPointRef.current?.speedKmh,
-      });
-      setSosAlertId(alert.id);
-    } catch (e) {
-      console.warn("SOS trigger failed", e);
-    }
-  }
 
   async function endRide() {
     if (!tripId) return;
@@ -129,7 +112,7 @@ export default function LiveRideScreen() {
         ))}
       </View>
 
-      <TouchableOpacity style={styles.sosButton} onPress={() => tripId && triggerSos(tripId)}>
+      <TouchableOpacity style={styles.sosButton} onPress={() => setSosReason("manual")}>
         <Text style={styles.sosButtonText}>SOS</Text>
       </TouchableOpacity>
 
@@ -137,7 +120,7 @@ export default function LiveRideScreen() {
         <Text style={styles.stopButtonText}>■  END RIDE</Text>
       </TouchableOpacity>
 
-      {sosAlertId && tripId && <SosOverlay alertId={sosAlertId} onResolved={() => setSosAlertId(null)} />}
+      {sosReason && <SosOverlay reason={sosReason} onResolved={() => setSosReason(null)} />}
     </View>
   );
 }

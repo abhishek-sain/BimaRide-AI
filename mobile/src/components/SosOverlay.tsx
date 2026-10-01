@@ -1,100 +1,84 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { api } from "../api/client";
+import React, { useEffect, useRef, useState } from "react";
+import { Modal, StyleSheet, Text, TouchableOpacity, Vibration, View } from "react-native";
 
-const COUNTDOWN_SECONDS = 15;
-
-interface SosStatus {
-  dispatched: boolean;
-  contacts_notified: number;
-}
+const VIBRATE_DURATION_MS = 60_000; // 1 minute
+// 800ms buzz / 400ms pause, repeated. Android honors the custom duration;
+// iOS always does a fixed ~400ms buzz per cycle regardless of the number
+// given — on both platforms this reads as a continuous, attention-grabbing
+// pulse until cancelled or the minute is up.
+const VIBRATE_PATTERN = [800, 400];
 
 export default function SosOverlay({
-  alertId,
+  reason = "crash",
   onResolved,
 }: {
-  alertId: string;
+  /** "crash" for an auto-detected crash-suspect event, "manual" for the SOS button. */
+  reason?: "crash" | "manual";
   onResolved: () => void;
 }) {
-  const [secondsLeft, setSecondsLeft] = useState(COUNTDOWN_SECONDS);
-  const [dispatched, setDispatched] = useState(false);
-  const [contactsNotified, setContactsNotified] = useState(0);
-  const resolvedRef = useRef(false);
-
-  const dispatch = useCallback(async () => {
-    resolvedRef.current = true;
-    try {
-      const res = await api.post<SosStatus>(`/sos/${alertId}/timeout`, {});
-      setContactsNotified(res.contacts_notified);
-    } catch (e) {
-      console.warn(e);
-    }
-    setDispatched(true);
-  }, [alertId]);
+  const [stopped, setStopped] = useState(false);
+  const [secondsLeft, setSecondsLeft] = useState(VIBRATE_DURATION_MS / 1000);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const autoStopRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setSecondsLeft((s) => {
-        if (s <= 1) {
-          clearInterval(interval);
-          if (!resolvedRef.current) dispatch();
-          return 0;
-        }
-        return s - 1;
-      });
+    Vibration.vibrate(VIBRATE_PATTERN, true);
+
+    countdownRef.current = setInterval(() => {
+      setSecondsLeft((s) => (s > 0 ? s - 1 : 0));
     }, 1000);
-    return () => clearInterval(interval);
-  }, [dispatch]);
 
-  async function imOk() {
-    resolvedRef.current = true;
-    try {
-      await api.post(`/sos/${alertId}/confirm`, { confirmed_ok: true });
-    } catch (e) {
-      console.warn(e);
-    }
-    onResolved();
+    autoStopRef.current = setTimeout(() => {
+      Vibration.cancel();
+      setStopped(true);
+    }, VIBRATE_DURATION_MS);
+
+    return () => {
+      // Belt-and-braces: cancel on unmount too, in case the screen is torn
+      // down (e.g. navigating away) before either stop path runs — a
+      // vibration call with no matching cancel would otherwise outlive
+      // this component and keep buzzing the phone indefinitely.
+      Vibration.cancel();
+      if (countdownRef.current) clearInterval(countdownRef.current);
+      if (autoStopRef.current) clearTimeout(autoStopRef.current);
+    };
+  }, []);
+
+  function stopNow() {
+    Vibration.cancel();
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    if (autoStopRef.current) clearTimeout(autoStopRef.current);
+    setStopped(true);
   }
 
-  async function needHelp() {
-    resolvedRef.current = true;
-    try {
-      const res = await api.post<SosStatus>(`/sos/${alertId}/confirm`, { confirmed_ok: false });
-      setContactsNotified(res.contacts_notified);
-    } catch (e) {
-      console.warn(e);
-    }
-    setDispatched(true);
-  }
+  const mm = String(Math.floor(secondsLeft / 60)).padStart(2, "0");
+  const ss = String(secondsLeft % 60).padStart(2, "0");
 
   return (
     <Modal transparent animationType="fade">
       <View style={styles.backdrop}>
         <View style={styles.card}>
-          {!dispatched ? (
+          {!stopped ? (
             <>
-              <Text style={styles.title}>Possible crash detected</Text>
-              <Text style={styles.countdown}>{secondsLeft}</Text>
-              <Text style={styles.body}>Are you OK? Emergency contacts will be alerted automatically.</Text>
-              <TouchableOpacity style={styles.okButton} onPress={imOk}>
-                <Text style={styles.okButtonText}>I&apos;M OK</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.helpButton} onPress={needHelp}>
-                <Text style={styles.helpButtonText}>I NEED HELP — ALERT NOW</Text>
+              <Text style={styles.title}>
+                {reason === "crash" ? "Possible crash detected" : "SOS"}
+              </Text>
+              <Text style={styles.countdown}>
+                {mm}:{ss}
+              </Text>
+              <Text style={styles.body}>
+                Your phone will keep vibrating for up to a minute to get your attention, or anyone nearby&apos;s.
+              </Text>
+              <TouchableOpacity style={styles.stopButton} onPress={stopNow}>
+                <Text style={styles.stopButtonText}>I&apos;M OK — STOP VIBRATING</Text>
               </TouchableOpacity>
             </>
           ) : (
             <>
-              <Text style={styles.title}>
-                {contactsNotified > 0 ? "Emergency contacts alerted" : "No emergency contacts alerted"}
-              </Text>
-              <Text style={styles.body}>
-                {contactsNotified > 0
-                  ? `Texted your location and last speed to ${contactsNotified} emergency contact${contactsNotified === 1 ? "" : "s"}.`
-                  : "No SMS could be sent — add emergency contacts from the home screen so this works next time."}
-              </Text>
-              <TouchableOpacity style={styles.okButton} onPress={onResolved}>
-                <Text style={styles.okButtonText}>CLOSE</Text>
+              <Text style={styles.title}>Vibration stopped</Text>
+              <Text style={styles.body}>Glad you&apos;re OK.</Text>
+              <TouchableOpacity style={styles.stopButton} onPress={onResolved}>
+                <Text style={styles.stopButtonText}>CLOSE</Text>
               </TouchableOpacity>
             </>
           )}
@@ -108,10 +92,8 @@ const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.85)", justifyContent: "center", alignItems: "center" },
   card: { backgroundColor: "#161F32", borderRadius: 20, padding: 28, width: "85%", alignItems: "center" },
   title: { color: "#fff", fontSize: 20, fontWeight: "800", textAlign: "center", marginBottom: 12 },
-  countdown: { color: "#EF4444", fontSize: 56, fontWeight: "800", marginBottom: 12 },
+  countdown: { color: "#EF4444", fontSize: 48, fontWeight: "800", marginBottom: 12, fontVariant: ["tabular-nums"] },
   body: { color: "#8892A6", textAlign: "center", marginBottom: 20 },
-  okButton: { backgroundColor: "#22C55E", borderRadius: 12, paddingVertical: 14, width: "100%", alignItems: "center", marginBottom: 10 },
-  okButtonText: { color: "#06210F", fontWeight: "800" },
-  helpButton: { backgroundColor: "#EF4444", borderRadius: 12, paddingVertical: 14, width: "100%", alignItems: "center" },
-  helpButtonText: { color: "#fff", fontWeight: "800" },
+  stopButton: { backgroundColor: "#22C55E", borderRadius: 12, paddingVertical: 14, width: "100%", alignItems: "center" },
+  stopButtonText: { color: "#06210F", fontWeight: "800" },
 });
