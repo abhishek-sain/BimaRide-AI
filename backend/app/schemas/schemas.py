@@ -83,6 +83,10 @@ class Token(BaseModel):
 
 
 class EmergencyContact(BaseModel):
+    """The write path — validates a contact being saved. Deliberately
+    strict (requires a country code) because this is the shape that
+    actually gets texted by services/notifications.py."""
+
     name: str = Field(min_length=1, max_length=NAME_MAX)
     phone: str
 
@@ -90,6 +94,23 @@ class EmergencyContact(BaseModel):
     @classmethod
     def _phone_is_valid(cls, v: str) -> str:
         return _validate_emergency_phone(v)
+
+
+class EmergencyContactOut(BaseModel):
+    """The read path — deliberately has NO validation. RiderOut uses this,
+    not EmergencyContact, because a response model re-validates whatever is
+    already in the database. If it were as strict as the write path, a
+    contact saved under an older, looser rule (e.g. before country codes
+    were required) would make every profile fetch for that rider fail with
+    a 500 — including the one AuthContext calls right after login — until
+    they happened to re-save that one field. A stricter rule should block
+    new bad data, never retroactively break reading old data."""
+
+    name: str
+    phone: str
+
+    class Config:
+        from_attributes = True
 
 
 class RiderOut(BaseModel):
@@ -107,7 +128,7 @@ class RiderOut(BaseModel):
     idv: Optional[float] = None
     ncb_percent: Optional[float] = None
     policy_expiry: Optional[str] = None
-    emergency_contacts: list[EmergencyContact] = []
+    emergency_contacts: list[EmergencyContactOut] = []
 
     class Config:
         from_attributes = True
