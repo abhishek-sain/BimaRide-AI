@@ -7,6 +7,7 @@ import * as Notifications from "expo-notifications";
 import { AuthProvider, useAuth } from "../context/AuthContext";
 import { ContactAuthProvider, useContactAuth } from "../context/ContactAuthContext";
 import { RoleProvider, useRole } from "../context/RoleContext";
+import { shouldHandleCrashAlert } from "../services/crashAlertDedupe";
 
 /** Routes to the crash-alert screen whenever a crash_alert push arrives —
  * whether the contact tapped it (app was backgrounded/closed) or it just
@@ -18,6 +19,9 @@ function NotificationRouter() {
   useEffect(() => {
     function openIfCrashAlert(data: Record<string, unknown> | undefined) {
       if (!data || data.type !== "crash_alert") return;
+      // The same alert can also arrive over the live-map WebSocket — only
+      // the first one to get here should open the alarm.
+      if (!shouldHandleCrashAlert(data.alert_id as string | undefined)) return;
       const params = new URLSearchParams({
         riderName: String(data.rider_name ?? "Rider"),
         lat: data.lat != null ? String(data.lat) : "",

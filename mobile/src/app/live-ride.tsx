@@ -65,10 +65,7 @@ export default function LiveRideScreen() {
           onNewEvent: (event) => {
             setRecentEvents((prev) => [event, ...prev].slice(0, 10));
           },
-          onCrashSuspected: () => {
-            setSosReason("crash");
-            reportCrashToContacts(trip.id);
-          },
+          onCrashSuspected: () => handleCrashDetected(trip.id),
         });
         recorderRef.current = recorder;
         await recorder.start();
@@ -120,6 +117,15 @@ export default function LiveRideScreen() {
       setNotifyState("idle");
       Alert.alert("Could not notify your contact", e.message ?? String(e));
     }
+  }
+
+  // The single place a crash is handled. Real detection (onCrashSuspected)
+  // and the dev-only simulate button below both go through this, so a
+  // simulated crash is a faithful test of everything downstream of
+  // detection — local alarm, backend crash-alert, live-socket + push.
+  function handleCrashDetected(activeTripId: string) {
+    setSosReason("crash");
+    reportCrashToContacts(activeTripId);
   }
 
   function onSosPress() {
@@ -183,6 +189,12 @@ export default function LiveRideScreen() {
         <Text style={styles.sosButtonText}>SOS</Text>
       </TouchableOpacity>
 
+      {__DEV__ && tripId && (
+        <TouchableOpacity style={styles.simulateButton} onPress={() => handleCrashDetected(tripId)}>
+          <Text style={styles.simulateButtonText}>🧪 Simulate crash (dev only)</Text>
+        </TouchableOpacity>
+      )}
+
       <TouchableOpacity style={styles.stopButton} onPress={endRide}>
         <Text style={styles.stopButtonText}>■  END RIDE</Text>
       </TouchableOpacity>
@@ -220,6 +232,8 @@ const styles = StyleSheet.create({
   feedItem: { color: "#FBBF24", marginBottom: 4 },
   sosButton: { width: 90, height: 90, borderRadius: 45, backgroundColor: "#EF4444", alignItems: "center", justifyContent: "center", marginBottom: 20 },
   sosButtonText: { color: "#fff", fontWeight: "800", fontSize: 18 },
+  simulateButton: { borderWidth: 1, borderColor: "#F59E0B", borderStyle: "dashed", borderRadius: 12, paddingVertical: 10, paddingHorizontal: 18, marginBottom: 14 },
+  simulateButtonText: { color: "#F59E0B", fontWeight: "600", fontSize: 13 },
   stopButton: { backgroundColor: "#1E2A45", borderRadius: 16, paddingVertical: 16, paddingHorizontal: 40 },
   stopButtonText: { color: "#fff", fontWeight: "800", fontSize: 16 },
 });

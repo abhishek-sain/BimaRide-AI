@@ -7,10 +7,14 @@ with their own push tokens — see services/push.py for why that's a
 strictly better fit than the Twilio integration it replaces.
 """
 
+import uuid
+
+import anyio.from_thread
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_rider
+from app.api.live import broadcast_to_trip
 from app.core.database import get_db
 from app.models.models import Connection, Rider, Trip
 from app.schemas.schemas import CrashAlertIn, CrashAlertOut, RideNotifyOut
@@ -64,20 +68,37 @@ def crash_alert(
     if not trip:
         raise HTTPException(status_code=404, detail="Trip not found")
 
+    # One id shared by BOTH delivery channels below, so a contact whose app
+    # is open and who ALSO gets the push (production builds) can recognise
+    # it as the same alert and open the alarm screen once, not twice.
+    alert_data = {
+        "type": "crash_alert",
+        "alert_id": uuid.uuid4().hex,
+        "trip_id": trip.id,
+        "rider_id": rider.id,
+        "rider_name": rider.name,
+        "lat": payload.lat,
+        "lon": payload.lon,
+        "speed_kmh": payload.speed_kmh,
+    }
+
     tokens = _accepted_contact_tokens(db, rider.id)
     sent = send_expo_push(
         tokens,
         title="🚨 Crash alert",
         body=f"{rider.name} may have been in a crash. Tap to see their location.",
-        data={
-            "type": "crash_alert",
-            "trip_id": trip.id,
-            "rider_id": rider.id,
-            "rider_name": rider.name,
-            "lat": payload.lat,
-            "lon": payload.lon,
-            "speed_kmh": payload.speed_kmh,
-        },
+        data=alert_data,
         category_id="crash_alert",
     )
-    return CrashAlertOut(notified=sent)
+
+    # Second channel: any contact currently watching this trip's live map
+    # gets it instantly over the WebSocket. This is the ONLY channel that
+    # works in Expo Go (no remote push there since SDK 53). This endpoint is
+    # a sync def running in FastAPI's worker thread, so hop back onto the
+    # event loop that owns the sockets to send.
+    try:
+        live_viewers = anyio.from_thread.run(broadcast_to_trip, trip.id, alert_data)
+    except Exception:
+        live_viewers = 0
+
+    return CrashAlertOut(notified=sent, live_viewers=live_viewers)

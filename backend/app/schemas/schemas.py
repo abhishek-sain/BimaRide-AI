@@ -377,3 +377,4 @@ class CrashAlertIn(BaseModel):
 
 class CrashAlertOut(BaseModel):
     notified: int  # how many connected, accepted contacts were pushed
+    live_viewers: int = 0  # how many contacts watching the live map got it over the WebSocket

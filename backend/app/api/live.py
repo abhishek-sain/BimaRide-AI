@@ -36,6 +36,26 @@ router = APIRouter(tags=["live"])
 _subscribers: dict[str, set[WebSocket]] = defaultdict(set)
 
 
+async def broadcast_to_trip(trip_id: str, payload: dict) -> int:
+    """Sends `payload` to every contact currently watching this trip and
+    returns how many sockets it reached. Used for the rider's live GPS
+    fixes and for crash alerts — the latter matters because push
+    notifications aren't available in Expo Go at all (SDK 53+), so the
+    WebSocket is the only channel a contact in Expo Go can receive a crash
+    alert on, and a useful second channel alongside push everywhere else."""
+    delivered = 0
+    dead: list[WebSocket] = []
+    for sub in list(_subscribers.get(trip_id, ())):
+        try:
+            await sub.send_json(payload)
+            delivered += 1
+        except Exception:
+            dead.append(sub)
+    for sub in dead:
+        _subscribers[trip_id].discard(sub)
+    return delivered
+
+
 async def _authenticate(token: str) -> tuple[str, str] | None:
     """Returns (account_type, account_id) or None if the token is invalid."""
     decoded = decode_access_token(token)
@@ -91,15 +111,10 @@ async def trip_live_location(websocket: WebSocket, trip_id: str, token: str = ""
                 # Broadcast this fix to every contact currently watching —
                 # never echo back to other riders (there's only ever one
                 # rider per trip anyway) and never trust a contact's own
-                # messages as location data.
-                dead: list[WebSocket] = []
-                for sub in _subscribers[trip_id]:
-                    try:
-                        await sub.send_json({"type": "location", **message})
-                    except Exception:
-                        dead.append(sub)
-                for sub in dead:
-                    _subscribers[trip_id].discard(sub)
+                # messages as location data. "type" is set AFTER the
+                # spread so a rider's message can't relabel itself as
+                # something else (e.g. a forged "crash_alert").
+                await broadcast_to_trip(trip_id, {**message, "type": "location"})
             # A contact's incoming messages are intentionally ignored —
             # this channel is read-only for them.
     except WebSocketDisconnect:

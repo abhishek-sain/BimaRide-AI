@@ -4,6 +4,7 @@ import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from "rea
 import MapView, { Marker } from "react-native-maps";
 import { Ionicons } from "@expo/vector-icons";
 import { loadToken } from "../api/client";
+import { shouldHandleCrashAlert } from "../services/crashAlertDedupe";
 import { LiveLocationMessage, LiveLocationSocket } from "../services/liveLocationSocket";
 
 export default function ContactLiveMapScreen() {
@@ -24,6 +25,20 @@ export default function ContactLiveMapScreen() {
         onOpen: () => setConnected(true),
         onClose: () => setConnected(false),
         onMessage: (msg) => setLocation(msg),
+        onCrashAlert: (alert) => {
+          // The only crash-alert channel that works in Expo Go (no remote
+          // push there) — and harmless alongside push elsewhere, since
+          // shouldHandleCrashAlert drops the duplicate.
+          if (!shouldHandleCrashAlert(alert.alert_id)) return;
+          const params = new URLSearchParams({
+            riderName: alert.rider_name ?? riderName ?? "Rider",
+            lat: alert.lat != null ? String(alert.lat) : "",
+            lon: alert.lon != null ? String(alert.lon) : "",
+            speedKmh: alert.speed_kmh != null ? String(alert.speed_kmh) : "",
+            tripId: alert.trip_id ?? tripId,
+          });
+          router.push(`/crash-alert?${params.toString()}`);
+        },
         onError: (e) => console.warn("Live map socket error:", e),
       });
       socket.connect();
@@ -34,7 +49,7 @@ export default function ContactLiveMapScreen() {
       cancelled = true;
       socketRef.current?.close();
     };
-  }, [tripId]);
+  }, [tripId, router, riderName]);
 
   return (
     <View style={styles.container}>
