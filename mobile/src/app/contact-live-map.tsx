@@ -5,6 +5,7 @@ import MapView, { Marker } from "react-native-maps";
 import { Ionicons } from "@expo/vector-icons";
 import { loadToken } from "../api/client";
 import { openCrashAlert } from "../services/openCrashAlert";
+import { usePendingAlertReplay } from "../services/usePendingAlertReplay";
 import { LiveLocationMessage, LiveLocationSocket } from "../services/liveLocationSocket";
 
 export default function ContactLiveMapScreen() {
@@ -14,6 +15,10 @@ export default function ContactLiveMapScreen() {
   const [connected, setConnected] = useState(false);
   const [ended, setEnded] = useState(false);
   const socketRef = useRef<LiveLocationSocket | null>(null);
+
+  // Safety net behind the socket: if it was mid-reconnect when an alert was
+  // raised, this still surfaces it within 5s.
+  usePendingAlertReplay();
 
   useEffect(() => {
     let cancelled = false;

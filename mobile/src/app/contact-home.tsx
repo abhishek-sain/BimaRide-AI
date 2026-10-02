@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import {
   ActivityIndicator,
   Alert,
@@ -16,8 +16,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { api, ApiError } from "../api/client";
 import { useContactAuth } from "../context/ContactAuthContext";
 import { useRole } from "../context/RoleContext";
-import { openCrashAlert } from "../services/openCrashAlert";
-import { Connection, CrashAlertRecord } from "../types";
+import { usePendingAlertReplay } from "../services/usePendingAlertReplay";
+import { Connection } from "../types";
 
 export default function ContactHomeScreen() {
   const router = useRouter();
@@ -52,43 +52,9 @@ export default function ContactHomeScreen() {
     }
   }, []);
 
-  // Replay: any unresolved alert from a connected rider that this contact
-  // hasn't acknowledged. This is what makes an alert raised while the app
-  // was offline, backgrounded, or on this screen (no live socket here) still
-  // surface — and the only crash-alert path besides the live map in Expo Go.
-  const checkPendingAlerts = useCallback(async () => {
-    try {
-      const pending = await api.get<CrashAlertRecord[]>("/alerts/pending");
-      for (const a of pending) {
-        openCrashAlert(router, {
-          alert_id: a.id,
-          kind: a.kind,
-          trip_id: a.trip_id,
-          rider_name: a.rider_name,
-          lat: a.lat,
-          lon: a.lon,
-          speed_kmh: a.speed_kmh,
-        });
-      }
-    } catch {
-      // offline or transient — next tick
-    }
-  }, [router]);
-
-  // While this screen is focused, refresh every 5s: "Riding now" status,
-  // incoming/accepted connection requests, and pending alerts all stay current
-  // without pulling to refresh.
-  useFocusEffect(
-    useCallback(() => {
-      load();
-      checkPendingAlerts();
-      const timer = setInterval(() => {
-        load();
-        checkPendingAlerts();
-      }, 5000);
-      return () => clearInterval(timer);
-    }, [load, checkPendingAlerts])
-  );
+  // Auto-refresh every 5s (riding status, connection requests) and replay
+  // any alert this contact missed — see usePendingAlertReplay.
+  usePendingAlertReplay(load);
 
   async function shareCode() {
     if (!contact) return;
