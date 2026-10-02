@@ -76,6 +76,10 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
+      <TouchableOpacity style={[styles.smallButton, { marginBottom: 12 }]} onPress={() => router.push("/alerts")}>
+        <Text style={styles.smallButtonText}>Alert history</Text>
+      </TouchableOpacity>
+
       <Text style={styles.sectionTitle}>Recent trips</Text>
       <FlatList
         data={trips}

@@ -3,14 +3,21 @@
 // backend recomputes authoritatively (source of truth) when the trip ends.
 import { TripPointOut } from "../types";
 
+// Detection is GPS-derived (speed change and heading change), NOT from the raw
+// accelerometer axes — those include gravity and depend on how the phone is
+// mounted, which produced constant false "harsh acceleration" events on a
+// stationary phone. See backend/app/services/events.py for the full reasoning;
+// the two files must stay in sync.
 export const HARSH_BRAKE_G = 0.35;
 export const HARSH_ACCEL_G = 0.3;
 export const CORNER_LATERAL_G = 0.3;
-export const CORNER_GYRO_DPS = 25.0;
-export const CRASH_DECEL_G = 0.8;
+export const CORNER_MIN_SPEED_KMH = 10.0;
+export const MAX_DT_S = 3.0;
 export const CRASH_SPEED_DROP_KMH = 25.0;
 export const CRASH_WINDOW_S = 2.0;
+export const CRASH_MIN_PRE_SPEED_KMH = 30.0;
 export const DEFAULT_SPEED_LIMIT_KMH = 50.0;
+const G = 9.81;
 
 export type LocalEventType =
   | "harsh_brake"
@@ -68,40 +75,41 @@ export function stepLiveState(
     distanceKm += haversineKm(prev.lat, prev.lon, cur.lat, cur.lon);
   }
 
+  const haveSpeeds = cur.speed_kmh != null && prev.speed_kmh != null;
   let longG: number | null = null;
-  if (cur.accel_y != null) longG = cur.accel_y;
-  else if (cur.speed_kmh != null && prev.speed_kmh != null) {
-    const dvMs = (cur.speed_kmh - prev.speed_kmh) / 3.6;
-    longG = dvMs / dt / 9.81;
+  if (haveSpeeds && dt <= MAX_DT_S) {
+    longG = ((cur.speed_kmh! - prev.speed_kmh!) / 3.6 / dt) / G;
   }
 
-  if (longG != null) {
-    if (longG <= -HARSH_BRAKE_G) {
-      newEvent = { type: "harsh_brake", ts: Date.now(), peakValue: Math.abs(longG) };
-    } else if (longG >= HARSH_ACCEL_G) {
-      newEvent = { type: "harsh_accel", ts: Date.now(), peakValue: longG };
-    }
-
-    if (
-      longG <= -CRASH_DECEL_G &&
-      prev.speed_kmh != null &&
-      cur.speed_kmh != null &&
-      prev.speed_kmh - cur.speed_kmh >= CRASH_SPEED_DROP_KMH &&
-      dt <= CRASH_WINDOW_S
-    ) {
-      crashDetected = true;
-      newEvent = { type: "crash_suspect", ts: Date.now(), peakValue: Math.abs(longG) };
-    }
+  if (
+    haveSpeeds &&
+    dt <= CRASH_WINDOW_S &&
+    prev.speed_kmh! >= CRASH_MIN_PRE_SPEED_KMH &&
+    prev.speed_kmh! - cur.speed_kmh! >= CRASH_SPEED_DROP_KMH
+  ) {
+    crashDetected = true;
+    newEvent = { type: "crash_suspect", ts: Date.now(), peakValue: Math.abs(longG ?? 0) };
+  } else if (longG != null && longG <= -HARSH_BRAKE_G) {
+    newEvent = { type: "harsh_brake", ts: Date.now(), peakValue: Math.abs(longG) };
+  } else if (longG != null && longG >= HARSH_ACCEL_G) {
+    newEvent = { type: "harsh_accel", ts: Date.now(), peakValue: longG };
   }
 
-  const latG = cur.accel_x;
-  const yaw = cur.gyro_z;
+  // Cornering: centripetal g from speed x heading change.
   if (
     !newEvent &&
-    ((latG != null && Math.abs(latG) >= CORNER_LATERAL_G) ||
-      (yaw != null && Math.abs(yaw) >= CORNER_GYRO_DPS))
+    dt <= MAX_DT_S &&
+    cur.speed_kmh != null &&
+    cur.speed_kmh >= CORNER_MIN_SPEED_KMH &&
+    cur.heading != null &&
+    prev.heading != null
   ) {
-    newEvent = { type: "cornering", ts: Date.now(), peakValue: Math.abs(latG ?? 0) };
+    const dHeading = Math.abs(((cur.heading - prev.heading + 540) % 360) - 180);
+    const yawRateRad = ((dHeading / dt) * Math.PI) / 180;
+    const latG = ((cur.speed_kmh / 3.6) * yawRateRad) / G;
+    if (latG >= CORNER_LATERAL_G) {
+      newEvent = { type: "cornering", ts: Date.now(), peakValue: latG };
+    }
   }
 
   if (cur.speed_kmh != null && cur.speed_kmh > DEFAULT_SPEED_LIMIT_KMH) {

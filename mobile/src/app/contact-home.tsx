@@ -16,7 +16,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { api, ApiError } from "../api/client";
 import { useContactAuth } from "../context/ContactAuthContext";
 import { useRole } from "../context/RoleContext";
-import { Connection } from "../types";
+import { openCrashAlert } from "../services/openCrashAlert";
+import { Connection, CrashAlertRecord } from "../types";
 
 export default function ContactHomeScreen() {
   const router = useRouter();
@@ -51,10 +52,42 @@ export default function ContactHomeScreen() {
     }
   }, []);
 
+  // Replay: any unresolved alert from a connected rider that this contact
+  // hasn't acknowledged. This is what makes an alert raised while the app
+  // was offline, backgrounded, or on this screen (no live socket here) still
+  // surface — and the only crash-alert path besides the live map in Expo Go.
+  const checkPendingAlerts = useCallback(async () => {
+    try {
+      const pending = await api.get<CrashAlertRecord[]>("/alerts/pending");
+      for (const a of pending) {
+        openCrashAlert(router, {
+          alert_id: a.id,
+          kind: a.kind,
+          trip_id: a.trip_id,
+          rider_name: a.rider_name,
+          lat: a.lat,
+          lon: a.lon,
+          speed_kmh: a.speed_kmh,
+        });
+      }
+    } catch {
+      // offline or transient — next tick
+    }
+  }, [router]);
+
+  // While this screen is focused, refresh every 5s: "Riding now" status,
+  // incoming/accepted connection requests, and pending alerts all stay current
+  // without pulling to refresh.
   useFocusEffect(
     useCallback(() => {
       load();
-    }, [load])
+      checkPendingAlerts();
+      const timer = setInterval(() => {
+        load();
+        checkPendingAlerts();
+      }, 5000);
+      return () => clearInterval(timer);
+    }, [load, checkPendingAlerts])
   );
 
   async function shareCode() {
@@ -141,6 +174,11 @@ export default function ContactHomeScreen() {
         </TouchableOpacity>
       </View>
 
+      <TouchableOpacity style={styles.historyButton} onPress={() => router.push("/alerts")}>
+        <Ionicons name="time-outline" size={16} color="#fff" />
+        <Text style={styles.historyButtonText}>Alert history</Text>
+      </TouchableOpacity>
+
       <Text style={styles.sectionTitle}>Connect to a rider</Text>
       <View style={styles.enterRow}>
         <TextInput
@@ -223,6 +261,17 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   shareButtonText: { color: "#fff", fontWeight: "700" },
+  historyButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#1E2A45",
+    borderRadius: 10,
+    paddingVertical: 10,
+    marginBottom: 16,
+  },
+  historyButtonText: { color: "#fff", fontWeight: "600" },
   sectionTitle: { color: "#fff", fontWeight: "700", fontSize: 15, marginBottom: 10, marginTop: 8 },
   enterRow: { flexDirection: "row", gap: 10, marginBottom: 6 },
   input: {

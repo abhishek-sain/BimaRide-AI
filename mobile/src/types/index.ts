@@ -105,3 +105,24 @@ export interface SosAlert {
   confirmed_ok?: boolean | null;
   dispatched: boolean;
 }
+
+export interface AlertAck {
+  contact_id: string;
+  name: string;
+  at: string;
+}
+
+export interface CrashAlertRecord {
+  id: string;
+  trip_id: string;
+  rider_id: string;
+  rider_name: string;
+  kind: "crash" | "manual";
+  lat?: number | null;
+  lon?: number | null;
+  speed_kmh?: number | null;
+  status: "open" | "acknowledged" | "rider_ok";
+  created_at: string;
+  rider_ok_at?: string | null;
+  acknowledged_by: AlertAck[];
+}

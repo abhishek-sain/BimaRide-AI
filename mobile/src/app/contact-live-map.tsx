@@ -4,7 +4,7 @@ import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from "rea
 import MapView, { Marker } from "react-native-maps";
 import { Ionicons } from "@expo/vector-icons";
 import { loadToken } from "../api/client";
-import { shouldHandleCrashAlert } from "../services/crashAlertDedupe";
+import { openCrashAlert } from "../services/openCrashAlert";
 import { LiveLocationMessage, LiveLocationSocket } from "../services/liveLocationSocket";
 
 export default function ContactLiveMapScreen() {
@@ -12,6 +12,7 @@ export default function ContactLiveMapScreen() {
   const { tripId, riderName } = useLocalSearchParams<{ tripId: string; riderName?: string }>();
   const [location, setLocation] = useState<LiveLocationMessage | null>(null);
   const [connected, setConnected] = useState(false);
+  const [ended, setEnded] = useState(false);
   const socketRef = useRef<LiveLocationSocket | null>(null);
 
   useEffect(() => {
@@ -28,17 +29,10 @@ export default function ContactLiveMapScreen() {
         onCrashAlert: (alert) => {
           // The only crash-alert channel that works in Expo Go (no remote
           // push there) — and harmless alongside push elsewhere, since
-          // shouldHandleCrashAlert drops the duplicate.
-          if (!shouldHandleCrashAlert(alert.alert_id)) return;
-          const params = new URLSearchParams({
-            riderName: alert.rider_name ?? riderName ?? "Rider",
-            lat: alert.lat != null ? String(alert.lat) : "",
-            lon: alert.lon != null ? String(alert.lon) : "",
-            speedKmh: alert.speed_kmh != null ? String(alert.speed_kmh) : "",
-            tripId: alert.trip_id ?? tripId,
-          });
-          router.push(`/crash-alert?${params.toString()}`);
+          // openCrashAlert drops the duplicate.
+          openCrashAlert(router, { ...alert, rider_name: alert.rider_name ?? riderName, trip_id: alert.trip_id ?? tripId });
         },
+        onRideEnded: () => setEnded(true),
         onError: (e) => console.warn("Live map socket error:", e),
       });
       socket.connect();
@@ -81,9 +75,9 @@ export default function ContactLiveMapScreen() {
       <View style={styles.infoCard}>
         <Text style={styles.riderName}>{riderName ?? "Rider"}</Text>
         <View style={styles.statusRow}>
-          <View style={[styles.dot, { backgroundColor: connected ? "#22C55E" : "#F59E0B" }]} />
-          <Text style={styles.statusText}>{connected ? "Live" : "Reconnecting…"}</Text>
-          {location?.speed_kmh != null && (
+          <View style={[styles.dot, { backgroundColor: ended ? "#8892A6" : connected ? "#22C55E" : "#F59E0B" }]} />
+          <Text style={styles.statusText}>{ended ? "Ride ended — last known position" : connected ? "Live" : "Reconnecting…"}</Text>
+          {!ended && location?.speed_kmh != null && (
             <Text style={styles.speedText}>· {Math.round(location.speed_kmh)} km/h</Text>
           )}
         </View>

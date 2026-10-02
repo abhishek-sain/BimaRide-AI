@@ -8,6 +8,7 @@ export interface LiveLocationMessage {
 
 export interface CrashAlertMessage {
   alert_id?: string;
+  kind?: string;
   trip_id?: string;
   rider_name?: string;
   lat?: number | null;
@@ -41,6 +42,7 @@ export class LiveLocationSocket {
     private handlers: {
       onMessage?: (msg: LiveLocationMessage) => void;
       onCrashAlert?: (msg: CrashAlertMessage) => void;
+      onRideEnded?: () => void;
       onOpen?: () => void;
       onClose?: (code: number) => void;
       onError?: (e: unknown) => void;
@@ -65,6 +67,7 @@ export class LiveLocationSocket {
         const data = JSON.parse(event.data);
         if (data.type === "location") this.handlers.onMessage?.(data);
         else if (data.type === "crash_alert") this.handlers.onCrashAlert?.(data);
+        else if (data.type === "ride_ended") this.handlers.onRideEnded?.();
       } catch (e) {
         console.warn("Malformed live-location message:", e);
       }

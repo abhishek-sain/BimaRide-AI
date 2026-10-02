@@ -24,6 +24,11 @@ export default function LiveRideScreen() {
   const [recentEvents, setRecentEvents] = useState<LocalEvent[]>([]);
   const [elapsed, setElapsed] = useState(0);
   const [sosReason, setSosReason] = useState<"crash" | "manual" | null>(null);
+  const [alertId, setAlertId] = useState<string | null>(null);
+  // Resolves to the backend's alert id once the crash-alert call returns.
+  // The rider can tap "I'm OK" before that response arrives, so the OK call
+  // awaits this rather than assuming alertId is already set.
+  const alertIdPromiseRef = useRef<Promise<string | null>>(Promise.resolve(null));
   const [notifyState, setNotifyState] = useState<"idle" | "sending" | "sent">("idle");
   const recorderRef = useRef<RideRecorder | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -87,17 +92,37 @@ export default function LiveRideScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function reportCrashToContacts(activeTripId: string) {
+  function reportCrashToContacts(activeTripId: string, kind: "crash" | "manual"): Promise<string | null> {
     // Runs alongside, never instead of, the rider's own phone alarm
     // (SosOverlay) — this is the part that reaches someone ELSE.
-    try {
-      await api.post(`/trips/${activeTripId}/crash-alert`, {
+    const promise = api
+      .post<{ alert_id: string }>(`/trips/${activeTripId}/crash-alert`, {
         lat: lastLocationRef.current?.lat,
         lon: lastLocationRef.current?.lon,
         speed_kmh: lastLocationRef.current?.speedKmh,
+        kind,
+      })
+      .then((res) => {
+        setAlertId(res.alert_id);
+        return res.alert_id;
+      })
+      .catch((e) => {
+        console.warn("Crash alert to emergency contacts failed:", e);
+        return null;
       });
+    alertIdPromiseRef.current = promise;
+    return promise;
+  }
+
+  // "I'm OK" on the rider's alarm: tell the contacts it's a false alarm so
+  // they aren't left worrying over something already dismissed.
+  async function markRiderOk() {
+    const id = await alertIdPromiseRef.current;
+    if (!id) return;
+    try {
+      await api.post(`/alerts/${id}/rider-ok`);
     } catch (e) {
-      console.warn("Crash alert to emergency contacts failed:", e);
+      console.warn("Could not tell contacts you're OK:", e);
     }
   }
 
@@ -124,13 +149,15 @@ export default function LiveRideScreen() {
   // simulated crash is a faithful test of everything downstream of
   // detection — local alarm, backend crash-alert, live-socket + push.
   function handleCrashDetected(activeTripId: string) {
+    setAlertId(null);
     setSosReason("crash");
-    reportCrashToContacts(activeTripId);
+    reportCrashToContacts(activeTripId, "crash");
   }
 
   function onSosPress() {
+    setAlertId(null);
     setSosReason("manual");
-    if (tripId) reportCrashToContacts(tripId);
+    if (tripId) reportCrashToContacts(tripId, "manual");
   }
 
   async function endRide() {
@@ -199,7 +226,14 @@ export default function LiveRideScreen() {
         <Text style={styles.stopButtonText}>■  END RIDE</Text>
       </TouchableOpacity>
 
-      {sosReason && <SosOverlay reason={sosReason} onResolved={() => setSosReason(null)} />}
+      {sosReason && (
+        <SosOverlay
+          reason={sosReason}
+          alertId={alertId}
+          onImOk={markRiderOk}
+          onResolved={() => setSosReason(null)}
+        />
+      )}
     </View>
   );
 }

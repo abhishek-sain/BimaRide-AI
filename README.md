@@ -20,16 +20,20 @@ web-console/    Next.js insurer dashboard — portfolio KPIs, rider drill-down, 
    accelerometer/gyroscope at 10 Hz, buffers samples on-device, and uploads
    them to the backend every 5 seconds (with retry on failure).
 2. A rule-based engine mirrors the same logic on-device (instant feedback)
-   and on the backend (source of truth): longitudinal g → harsh braking /
-   acceleration, lateral g + yaw rate → cornering, GPS speed vs. local limit
-   → overspeed, sudden decel + speed collapse → crash-suspect.
+   and on the backend (source of truth). It is **GPS-derived, not read from
+   the raw accelerometer**: speed change → harsh braking / acceleration,
+   speed × heading change → cornering, speed vs. local limit → overspeed,
+   and a fast vehicle (≥30 km/h) losing ≥25 km/h within 2 s → crash-suspect.
+   (A phone accelerometer includes gravity and depends on how the phone is
+   mounted — reading one raw axis as "forward acceleration" made a
+   stationary phone look like it was constantly accelerating.)
 3. When the trip ends, the backend computes the final Rider Safety Score
    (weighted, per-100km normalised, matching the original deck's formula),
    flags rewards, and stores everything for the insurer console.
 4. A crash-suspect event (or the manual SOS button) makes the rider's own
    phone vibrate and sound an alarm continuously for up to a minute, and —
-   if they've paired with an Emergency Contact Person — pushes a crash
-   alert to that person's phone too, with the rider's location. See
+   if they've paired with an Emergency Contact Person — alerts that person
+   too, with the rider's location. See
    "Emergency contacts" below for the full picture.
 5. The insurer console reads the same backend to show portfolio risk,
    per-rider drill-downs, and an event heatmap.
@@ -52,12 +56,23 @@ Once paired:
   WebSocket (`/ws/trip/{id}`) to every connected contact currently viewing
   the live map — a real-time relay, not polling, and separate from the
   REST-ingested points used for scoring.
-- **Crash alerts.** The same crash-suspect detection that triggers the
-  rider's own phone alarm also calls `POST /trips/{id}/crash-alert`, which
-  pushes an alert — with the crash location and last recorded speed — to
-  every connected contact. Tapping it (or just having the app open) opens
-  a full-screen alert with a map pin and the **same continuous
-  vibrate+siren alarm** the rider gets, with a manual stop button.
+- **Crash and SOS alerts, with a response loop.** Crash auto-detection and
+  the manual SOS button both call `POST /trips/{id}/crash-alert`, which
+  *persists* the alert and delivers it three ways, all carrying the same
+  alert id so the contact's app opens one alarm, not several:
+  1. the live-map WebSocket (instant; the only channel that works in Expo
+     Go, which has no remote push since SDK 53),
+  2. a push notification (dev/production builds),
+  3. **replay** — the contact app polls `GET /alerts/pending`, so an alert
+     raised while they were offline or on another screen still surfaces.
+
+  The contact gets a full-screen alert with a map pin on the incident, the
+  rider's last speed, "Open in Google Maps", and the same continuous
+  vibrate+siren the rider's own phone plays. They tap **I'm responding**
+  and the rider's screen shows who acknowledged. If the rider taps **I'm
+  OK**, every contact is told it was a false alarm and their alarm stops
+  by itself. Contacts can tell a manual SOS from a detected crash, and
+  both sides have an **Alert history** screen.
 - **Ride-completed reassurance.** When a trip ends safely (not
   crash-flagged), contacts get a quieter "completed their ride safely"
   push — peace of mind on the common case, not just the emergency one.

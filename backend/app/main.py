@@ -54,6 +54,7 @@ app.include_router(insurer.router)
 app.include_router(contacts_auth.router)
 app.include_router(connections.router)
 app.include_router(alerts.router)
+app.include_router(alerts.alerts_router)
 app.include_router(live.router)
 
 

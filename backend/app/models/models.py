@@ -89,6 +89,34 @@ class ContactUser(Base):
     connections = relationship("Connection", back_populates="contact", cascade="all, delete-orphan")
 
 
+class CrashAlert(Base):
+    """A crash (auto-detected) or manual-SOS alert raised by a rider, with
+    its full lifecycle: open -> acknowledged by a contact and/or resolved by
+    the rider saying they're OK. Persisted so a contact who was offline, on
+    another screen, or in a build without push can still find it (replay),
+    and so each side can see what the other did about it.
+
+    Distinct from the older SosAlert (Twilio-SMS era, now dormant): that
+    one tracked an SMS dispatch; this one tracks people responding."""
+
+    __tablename__ = "crash_alerts"
+
+    id = Column(String, primary_key=True, default=gen_id)
+    trip_id = Column(String, ForeignKey("trips.id"), nullable=False, index=True)
+    rider_id = Column(String, ForeignKey("riders.id"), nullable=False, index=True)
+    kind = Column(String, default="crash")  # crash | manual
+    lat = Column(Float, nullable=True)
+    lon = Column(Float, nullable=True)
+    speed_kmh = Column(Float, nullable=True)
+    status = Column(String, default="open")  # open | acknowledged | rider_ok
+    created_at = Column(DateTime, default=datetime.utcnow)
+    rider_ok_at = Column(DateTime, nullable=True)
+    # [{contact_id, name, at}] — every contact who acknowledged
+    acknowledged_by = Column(JSON, default=list)
+
+    rider = relationship("Rider")
+
+
 class Connection(Base):
     """A pairing between a Rider and a ContactUser. Either side can send
     the request (by entering the other's connect_code); it only starts

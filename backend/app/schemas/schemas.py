@@ -1,6 +1,6 @@
 import re
 from datetime import date, datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
@@ -373,8 +373,31 @@ class CrashAlertIn(BaseModel):
     lat: Optional[float] = None
     lon: Optional[float] = None
     speed_kmh: Optional[float] = None
+    kind: Literal["crash", "manual"] = "crash"  # auto-detected vs the SOS button
 
 
 class CrashAlertOut(BaseModel):
+    alert_id: str
     notified: int  # how many connected, accepted contacts were pushed
     live_viewers: int = 0  # how many contacts watching the live map got it over the WebSocket
+
+
+class AckEntry(BaseModel):
+    contact_id: str
+    name: str
+    at: datetime
+
+
+class AlertOut(BaseModel):
+    id: str
+    trip_id: str
+    rider_id: str
+    rider_name: str
+    kind: str
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+    speed_kmh: Optional[float] = None
+    status: str  # open | acknowledged | rider_ok
+    created_at: datetime
+    rider_ok_at: Optional[datetime] = None
+    acknowledged_by: list[AckEntry] = []

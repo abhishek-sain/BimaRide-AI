@@ -1,9 +1,11 @@
 from datetime import datetime
 
+import anyio.from_thread
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_rider
+from app.api.live import broadcast_to_trip
 from app.core.database import get_db
 from app.models.models import Connection, Rider, RewardLedger, RideEvent, Trip, TripPoint
 from app.schemas.schemas import (
@@ -145,6 +147,14 @@ def end_trip(trip_id: str, db: Session = Depends(get_db), rider: Rider = Depends
 
     db.commit()
     db.refresh(trip)
+
+    # Tell anyone watching the live map the ride is over, so it stops
+    # showing a frozen pin as "Live". Best-effort: never fail ending a trip
+    # over a socket.
+    try:
+        anyio.from_thread.run(broadcast_to_trip, trip.id, {"type": "ride_ended", "trip_id": trip.id})
+    except Exception:
+        pass
 
     # A crash-flagged trip already got its own, more urgent push from
     # POST /trips/{id}/crash-alert the moment it was detected — sending a

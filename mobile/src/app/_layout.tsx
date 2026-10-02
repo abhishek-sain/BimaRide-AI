@@ -7,7 +7,7 @@ import * as Notifications from "expo-notifications";
 import { AuthProvider, useAuth } from "../context/AuthContext";
 import { ContactAuthProvider, useContactAuth } from "../context/ContactAuthContext";
 import { RoleProvider, useRole } from "../context/RoleContext";
-import { shouldHandleCrashAlert } from "../services/crashAlertDedupe";
+import { CrashAlertLike, openCrashAlert } from "../services/openCrashAlert";
 
 /** Routes to the crash-alert screen whenever a crash_alert push arrives —
  * whether the contact tapped it (app was backgrounded/closed) or it just
@@ -19,17 +19,9 @@ function NotificationRouter() {
   useEffect(() => {
     function openIfCrashAlert(data: Record<string, unknown> | undefined) {
       if (!data || data.type !== "crash_alert") return;
-      // The same alert can also arrive over the live-map WebSocket — only
-      // the first one to get here should open the alarm.
-      if (!shouldHandleCrashAlert(data.alert_id as string | undefined)) return;
-      const params = new URLSearchParams({
-        riderName: String(data.rider_name ?? "Rider"),
-        lat: data.lat != null ? String(data.lat) : "",
-        lon: data.lon != null ? String(data.lon) : "",
-        speedKmh: data.speed_kmh != null ? String(data.speed_kmh) : "",
-        tripId: String(data.trip_id ?? ""),
-      });
-      router.push(`/crash-alert?${params.toString()}`);
+      // The same alert can also arrive over the live-map socket or the
+      // home-screen replay poll — openCrashAlert opens it only once.
+      openCrashAlert(router, data as CrashAlertLike);
     }
 
     const receivedSub = Notifications.addNotificationReceivedListener((notification) => {
@@ -135,6 +127,7 @@ export default function RootLayout() {
                 <Stack.Screen name="contact-live-map" />
                 {/* Shared */}
                 <Stack.Screen name="crash-alert" options={{ gestureEnabled: false }} />
+                <Stack.Screen name="alerts" />
               </Stack>
             </Gate>
           </ContactAuthProvider>
