@@ -12,7 +12,8 @@
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "BimaRide AI needs your location while riding to score your trip and detect events.",
         "NSMotionUsageDescription": "BimaRide AI uses motion sensors to detect harsh braking, cornering, and crashes."
-      }
+      },
+      "bundleIdentifier": "com.bimarideai.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -26,7 +27,8 @@
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
         "VIBRATE"
-      ]
+      ],
+      "package": "com.bimarideai.app"
     },
     "web": {
       "favicon": "./assets/favicon.png"

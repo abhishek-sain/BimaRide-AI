@@ -99,6 +99,43 @@ needs `eas build --profile development` (or `npx expo run:android` /
 silently (logs a warning, doesn't crash) when running in Expo Go, so
 development isn't blocked on this.
 
+## Development build (needed for real push notifications)
+
+Expo Go can't receive remote push (removed in SDK 53). A development build is
+your own copy of Expo Go containing this app's native modules; it still loads
+your code from `npx expo start` over Wi-Fi.
+
+**One-time machine setup (macOS, already done on the dev machine):**
+`brew install openjdk@17`, `brew install --cask android-commandlinetools`,
+then `sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"`
+and export `JAVA_HOME`, `ANDROID_HOME` and `platform-tools` on `PATH`
+(see `~/.zshrc`).
+
+**Build and install:**
+```bash
+cd mobile
+npx expo prebuild --platform android          # generates android/ (gitignored)
+cd android && ./gradlew assembleDebug          # -> app/build/outputs/apk/debug/app-debug.apk
+adb install -r app/build/outputs/apk/debug/app-debug.apk   # phone on USB, USB debugging on
+```
+The same APK can be copied to a second phone and tapped to install — only
+installing needs USB, running does not. Then `npx expo start --dev-client`
+and open the app (not Expo Go) on each phone.
+
+**For push to actually deliver (needs your own accounts, can't be scripted):**
+1. `npx eas-cli login` then `npx eas-cli init` — writes
+   `extra.eas.projectId` into `app.json`; `getExpoPushTokenAsync` needs it.
+2. Create a Firebase project, add an Android app with package
+   `com.bimarideai.app`, download `google-services.json` into `mobile/`, and
+   set `"googleServicesFile": "./google-services.json"` under `android` in
+   `app.json`. Rebuild.
+3. In the Firebase console create a service-account key, then
+   `npx eas-cli credentials` → Android → upload it as the FCM V1 key, so
+   Expo's push service can send to your devices.
+
+`eas.json` also defines a `development` profile if you'd rather build in the
+cloud (`eas build --profile development --platform android`).
+
 ## How the insurance process works (and what this app doesn't do)
 
 **This app is a telematics and scoring layer, not an insurer.** It isn't a
