@@ -58,7 +58,7 @@ def send_expo_push(
             "priority": priority,
             # Android: ensures this shows as a heads-up notification with
             # its own channel rather than being silently grouped/throttled.
-            "channelId": "crash-alerts" if category_id == "crash_alert" else "default",
+            "channelId": "crash-alerts-v2" if category_id == "crash_alert" else "default",
             **({"categoryId": category_id} if category_id else {}),
         }
         for token in tokens

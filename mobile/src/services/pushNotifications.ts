@@ -14,15 +14,37 @@ Notifications.setNotificationHandler({
   }),
 });
 
-const CRASH_CHANNEL_ID = "crash-alerts";
+// Android notification channels are immutable once created (only the name and
+// description can change afterwards), so a channel that was created with the
+// wrong sound can't be fixed by editing its options. The id carries a version
+// for that reason: "crash-alerts" was created with `sound: "default"`, which
+// expo-notifications treats as a custom FILENAME — it doesn't exist, so it
+// logged "Custom sound 'default' not found in native app" and gave the channel
+// no sound at all. Bump the suffix (and backend/app/services/push.py, which
+// must send to the same id) if the channel's sound/importance ever has to change.
+const CRASH_CHANNEL_ID = "crash-alerts-v2";
+const LEGACY_CRASH_CHANNEL_ID = "crash-alerts";
 
 async function ensureAndroidChannels() {
   if (Platform.OS !== "android") return;
+
+  // Remove the broken v1 channel so it doesn't linger in the phone's settings.
+  await Notifications.deleteNotificationChannelAsync(LEGACY_CRASH_CHANNEL_ID);
+
   await Notifications.setNotificationChannelAsync(CRASH_CHANNEL_ID, {
     name: "Crash alerts",
     importance: Notifications.AndroidImportance.MAX,
     vibrationPattern: [0, 800, 400, 800, 400, 800],
-    sound: "default",
+    // `sound` is deliberately OMITTED: omitted means "the system default
+    // sound"; null means silent; any string means a custom file that must be
+    // bundled via the config plugin's `sounds` array.
+    // Play it as an ALARM rather than an ordinary notification: it follows
+    // the alarm volume (not the ringer/notification volume the user may have
+    // turned down) — the right stream for something that must be heard.
+    audioAttributes: {
+      usage: Notifications.AndroidAudioUsage.ALARM,
+      contentType: Notifications.AndroidAudioContentType.SONIFICATION,
+    },
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
   });
   await Notifications.setNotificationChannelAsync("default", {

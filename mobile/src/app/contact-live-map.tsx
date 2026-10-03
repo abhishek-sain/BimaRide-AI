@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import MapView, { Marker } from "react-native-maps";
+import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
 import { Ionicons } from "@expo/vector-icons";
 import { loadToken } from "../api/client";
 import { openCrashAlert } from "../services/openCrashAlert";
@@ -54,6 +54,7 @@ export default function ContactLiveMapScreen() {
     <View style={styles.container}>
       {location ? (
         <MapView
+          provider={PROVIDER_GOOGLE}
           style={StyleSheet.absoluteFill}
           region={{
             latitude: location.lat,

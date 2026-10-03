@@ -21,6 +21,24 @@ export async function loadToken(): Promise<string | null> {
   return stored;
 }
 
+/** FastAPI sends a plain string for most errors, but for request-validation
+ * failures (HTTP 422) `detail` is a LIST of {loc, msg, ...} objects. Passing
+ * that straight to Error() stringifies it as "[object Object]", which hid
+ * the real reason a registration was rejected. */
+function formatDetail(detail: unknown): string {
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    const lines = detail.map((item) => {
+      if (typeof item === "string") return item;
+      const field = Array.isArray(item?.loc) ? String(item.loc[item.loc.length - 1]) : "";
+      const msg = String(item?.msg ?? "Invalid value").replace(/^Value error, /, "");
+      return field && field !== "body" ? `${field}: ${msg}` : msg;
+    });
+    return lines.join("\n");
+  }
+  return JSON.stringify(detail);
+}
+
 class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -51,7 +69,7 @@ async function request<T>(
     let detail = res.statusText;
     try {
       const data = await res.json();
-      detail = data.detail ?? JSON.stringify(data);
+      detail = formatDetail(data.detail ?? data);
     } catch {
       // ignore parse errors
     }

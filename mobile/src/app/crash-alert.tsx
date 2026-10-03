@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Linking, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import MapView, { Marker } from "react-native-maps";
+import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
 import { api } from "../api/client";
 import { useAlarm } from "../services/useAlarm";
 import { useAlertStatus } from "../services/useAlertStatus";
@@ -85,6 +85,7 @@ export default function CrashAlertScreen() {
       <View style={styles.mapWrap}>
         {hasLocation ? (
           <MapView
+            provider={PROVIDER_GOOGLE}
             style={StyleSheet.absoluteFill}
             region={{ latitude: latNum!, longitude: lonNum!, latitudeDelta: 0.01, longitudeDelta: 0.01 }}
           >
