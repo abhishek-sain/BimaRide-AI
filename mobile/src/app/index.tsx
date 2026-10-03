@@ -101,6 +101,7 @@ export default function HomeScreen() {
               <Text style={styles.tripMeta}>
                 {item.distance_km.toFixed(1)} km · {item.events.length} events
                 {item.status === "crash_flagged" ? " · ⚠️ crash flagged" : ""}
+                {item.status === "abandoned" ? " · ⏹ ended unexpectedly" : ""}
               </Text>
             </View>
             <Text style={[styles.tripScore, { color: tierColor(item.trip_score ?? 0) }]}>

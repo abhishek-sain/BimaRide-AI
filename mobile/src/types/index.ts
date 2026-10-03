@@ -70,7 +70,7 @@ export interface Trip {
   rider_id: string;
   started_at: string;
   ended_at?: string;
-  status: "active" | "completed" | "crash_flagged";
+  status: "active" | "completed" | "crash_flagged" | "abandoned";
   distance_km: number;
   duration_s: number;
   avg_speed_kmh: number;

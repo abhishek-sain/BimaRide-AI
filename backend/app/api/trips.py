@@ -24,6 +24,22 @@ router = APIRouter(prefix="/trips", tags=["trips"])
 
 @router.post("", response_model=TripOut)
 def start_trip(payload: TripStart, db: Session = Depends(get_db), rider: Rider = Depends(get_current_rider)):
+    # A rider can only be on one ride at a time. Without this, a trip left
+    # "active" by a force-closed app (no End Ride tap, no crash, just the
+    # app getting killed) sits active forever, and a stale trip started
+    # days ago can outrank today's real one — which is exactly what left
+    # an emergency contact's live map staring at a dead trip with no
+    # updates. Closing every other still-"active" trip the instant a new
+    # one starts makes "the rider's active trip" always unambiguous.
+    stale = (
+        db.query(Trip)
+        .filter(Trip.rider_id == rider.id, Trip.status == "active")
+        .all()
+    )
+    for t in stale:
+        t.status = "abandoned"
+        t.ended_at = datetime.utcnow()
+
     trip = Trip(rider_id=rider.id, started_at=datetime.utcnow(), status="active")
     db.add(trip)
     db.commit()
