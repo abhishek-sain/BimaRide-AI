@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
 import { Ionicons } from "@expo/vector-icons";
+import OsmMapView from "../components/OsmMapView";
 import { loadToken } from "../api/client";
 import { openCrashAlert } from "../services/openCrashAlert";
 import { usePendingAlertReplay } from "../services/usePendingAlertReplay";
@@ -53,18 +53,13 @@ export default function ContactLiveMapScreen() {
   return (
     <View style={styles.container}>
       {location ? (
-        <MapView
-          provider={PROVIDER_GOOGLE}
+        <OsmMapView
           style={StyleSheet.absoluteFill}
-          region={{
-            latitude: location.lat,
-            longitude: location.lon,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
-          }}
-        >
-          <Marker coordinate={{ latitude: location.lat, longitude: location.lon }} title={riderName ?? "Rider"} />
-        </MapView>
+          latitude={location.lat}
+          longitude={location.lon}
+          title={riderName ?? "Rider"}
+          pinColor="#3B82F6"
+        />
       ) : (
         <View style={styles.waiting}>
           <ActivityIndicator color="#3B82F6" size="large" />

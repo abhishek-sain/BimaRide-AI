@@ -1,9 +1,14 @@
-# Getting a Google Maps API key (Android)
+# Getting a Google Maps API key (Android) — optional
 
-Needed for: the Emergency Contact's live-map screen and the crash-alert
-screen, both of which render a `react-native-maps` map. Nothing else in the
-app needs this — if you skip it, every other screen still works; only
-those two crash on Android with:
+**You almost certainly don't need this.** The Emergency Contact's live-map
+screen and the crash-alert screen use `components/OsmMapView.tsx` by
+default — OpenStreetMap rendered via Leaflet in a WebView, which needs no
+API key, no Google account, and no rebuild to change. This document is only
+for switching those two screens to `react-native-maps` (Google-backed on
+Android) instead, if you want a more native map feel later.
+
+If you skip this entirely, the app works fully. If you try to use
+`react-native-maps` without a key, it crashes with:
 
 ```
 java.lang.IllegalStateException: API key not found. Check that
@@ -11,7 +16,8 @@ java.lang.IllegalStateException: API key not found. Check that
 the <application> element of AndroidManifest.xml
 ```
 
-This is a Google account/billing step, so it can't be scripted for you.
+Getting a key is a Google account/billing step, so it can't be scripted
+for you.
 
 ## 1. Create a Google Cloud project (or reuse one)
 
@@ -87,6 +93,23 @@ Then reinstall the same APK on the second phone the same way as before.
 cd mobile
 npx expo config --json | python3 -c "import json,sys; d=json.load(sys.stdin); print([p for p in d['plugins'] if isinstance(p, list) and p[0]=='react-native-maps'])"
 ```
-should print your real key, not `""`. Once rebuilt and reinstalled, opening
-**View live location** or a crash alert on the contact's phone should show
-an actual Google map instead of crashing.
+should print your real key, not `""`. Once rebuilt and reinstalled, you
+still need one code change — the screens render `OsmMapView` by default,
+not `react-native-maps`, regardless of whether a key is configured:
+
+In `src/app/contact-live-map.tsx` and `src/app/crash-alert.tsx`, swap:
+```tsx
+import OsmMapView from "../components/OsmMapView";
+// ...
+<OsmMapView style={...} latitude={lat} longitude={lon} title={name} pinColor="#EF4444" />
+```
+for:
+```tsx
+import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
+// ...
+<MapView provider={PROVIDER_GOOGLE} style={...} region={{ latitude: lat, longitude: lon, latitudeDelta: 0.01, longitudeDelta: 0.01 }}>
+  <Marker coordinate={{ latitude: lat, longitude: lon }} title={name} pinColor="#EF4444" />
+</MapView>
+```
+Then prebuild and rebuild as above. Opening **View live location** or a
+crash alert on the contact's phone should show an actual Google map.

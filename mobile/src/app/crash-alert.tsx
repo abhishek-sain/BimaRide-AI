@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Linking, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
+import OsmMapView from "../components/OsmMapView";
 import { api } from "../api/client";
 import { useAlarm } from "../services/useAlarm";
 import { useAlertStatus } from "../services/useAlertStatus";
@@ -84,13 +84,13 @@ export default function CrashAlertScreen() {
 
       <View style={styles.mapWrap}>
         {hasLocation ? (
-          <MapView
-            provider={PROVIDER_GOOGLE}
+          <OsmMapView
             style={StyleSheet.absoluteFill}
-            region={{ latitude: latNum!, longitude: lonNum!, latitudeDelta: 0.01, longitudeDelta: 0.01 }}
-          >
-            <Marker coordinate={{ latitude: latNum!, longitude: lonNum! }} title={riderName ?? "Rider"} pinColor="#EF4444" />
-          </MapView>
+            latitude={latNum!}
+            longitude={lonNum!}
+            title={riderName ?? "Rider"}
+            pinColor="#EF4444"
+          />
         ) : (
           <View style={styles.noLocation}>
             <Text style={styles.noLocationText}>No location was included with this alert.</Text>
