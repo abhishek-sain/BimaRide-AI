@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { api, loadToken, setToken } from "../api/client";
 import { registerForPushNotificationsAsync } from "../services/pushNotifications";
+import { refreshFallDetectionToken } from "../services/fallDetectionService";
 import { ProfileUpdatePayload, Rider } from "../types";
 
 async function registerPushToken() {
@@ -22,6 +23,7 @@ interface AuthContextValue {
   logout: () => Promise<void>;
   updateEmergencyContacts: (contacts: { name: string; phone: string }[]) => Promise<void>;
   updateProfile: (payload: ProfileUpdatePayload) => Promise<void>;
+  updateMutualAidOptin: (optIn: boolean) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -34,6 +36,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const me = await api.get<Rider>("/auth/me");
       setRider(me);
+      // Background fall detection's native service caches the bearer
+      // token on-device so it keeps working with the app closed — JWTs
+      // expire after 7 days, so refresh that cache on every app open
+      // rather than leaving a long-running service stuck with a stale one.
+      refreshFallDetectionToken();
     } catch {
       setRider(null);
     }
@@ -76,9 +83,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setRider(updated);
   }
 
+  async function updateMutualAidOptin(optIn: boolean) {
+    const updated = await api.put<Rider>("/mutual-aid/optin", { opt_in: optIn });
+    setRider(updated);
+  }
+
   return (
     <AuthContext.Provider
-      value={{ rider, loading, login, register, logout, updateEmergencyContacts, updateProfile }}
+      value={{ rider, loading, login, register, logout, updateEmergencyContacts, updateProfile, updateMutualAidOptin }}
     >
       {children}
     </AuthContext.Provider>

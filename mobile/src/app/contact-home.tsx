@@ -17,6 +17,7 @@ import { api, ApiError } from "../api/client";
 import { useContactAuth } from "../context/ContactAuthContext";
 import { useRole } from "../context/RoleContext";
 import { usePendingAlertReplay } from "../services/usePendingAlertReplay";
+import { usePendingFallAlertReplay } from "../services/usePendingFallAlertReplay";
 import { Connection } from "../types";
 
 export default function ContactHomeScreen() {
@@ -55,6 +56,9 @@ export default function ContactHomeScreen() {
   // Auto-refresh every 5s (riding status, connection requests) and replay
   // any alert this contact missed — see usePendingAlertReplay.
   usePendingAlertReplay(load);
+  // Standalone fall alerts (background monitor, not tied to a trip) have
+  // their own replay poll — see usePendingFallAlertReplay.
+  usePendingFallAlertReplay();
 
   async function shareCode() {
     if (!contact) return;

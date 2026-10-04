@@ -62,6 +62,18 @@ class Rider(Base):
     connect_code = Column(String, unique=True, nullable=False, default=gen_connect_code)
     push_token = Column(String, nullable=True)  # Expo push token for this device
 
+    # Mutual-aid network: a rider who opts in can be pushed a nearby crash
+    # alert so they can physically help before a distant emergency contact
+    # could ever arrive. last_lat/lon/at is the only "where is this rider
+    # right now" signal the backend has outside an active trip — it's
+    # updated opportunistically from trip-point uploads (see
+    # api/trips.py:upload_points), so it's only fresh for riders who have
+    # ridden recently, not a continuous background location feed.
+    mutual_aid_optin = Column(Boolean, default=False, nullable=False)
+    last_lat = Column(Float, nullable=True)
+    last_lon = Column(Float, nullable=True)
+    last_location_at = Column(DateTime, nullable=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)
 
     trips = relationship("Trip", back_populates="rider", cascade="all, delete-orphan")
@@ -215,6 +227,52 @@ class SosAlert(Base):
     resolved_at = Column(DateTime, nullable=True)
     dispatched = Column(Boolean, default=False)
     contacts_notified = Column(Integer, default=0)  # how many emergency contacts an SMS actually went out to
+
+
+class FallAlert(Base):
+    """A fall/drop detected by the always-on background monitor (see the
+    native `fall-detection` Expo module), independent of an active trip —
+    unlike CrashAlert, which is always tied to one (trip_id NOT NULL).
+    Deliberately a separate table rather than making CrashAlert.trip_id
+    nullable: every other part of this app (the live-map WebSocket, the
+    trip-scoped alert UI) assumes a crash alert belongs to a trip, and
+    loosening that constraint would ripple through all of it for a case
+    that structurally has no trip to attach to."""
+
+    __tablename__ = "fall_alerts"
+
+    id = Column(String, primary_key=True, default=gen_id)
+    rider_id = Column(String, ForeignKey("riders.id"), nullable=False, index=True)
+    lat = Column(Float, nullable=True)
+    lon = Column(Float, nullable=True)
+    status = Column(String, default="open")  # open | acknowledged | rider_ok
+    created_at = Column(DateTime, default=datetime.utcnow)
+    rider_ok_at = Column(DateTime, nullable=True)
+    acknowledged_by = Column(JSON, default=list)  # [{contact_id, name, at}]
+
+    rider = relationship("Rider")
+
+
+class MutualAidPing(Base):
+    """One nearby, opted-in rider notified about another rider's crash
+    alert, and whether they responded. Paged immediately alongside the
+    rider's own emergency contacts (see api/alerts.py) — a stranger who
+    happens to be close by can often reach the rider faster than a contact
+    who isn't physically nearby, so this isn't gated on the contact not
+    responding."""
+
+    __tablename__ = "mutual_aid_pings"
+
+    id = Column(String, primary_key=True, default=gen_id)
+    alert_id = Column(String, ForeignKey("crash_alerts.id"), nullable=False, index=True)
+    rider_id = Column(String, ForeignKey("riders.id"), nullable=False, index=True)  # the nearby rider notified
+    distance_km = Column(Float, nullable=False)
+    status = Column(String, default="notified")  # notified | responding | dismissed
+    created_at = Column(DateTime, default=datetime.utcnow)
+    responded_at = Column(DateTime, nullable=True)
+
+    alert = relationship("CrashAlert")
+    rider = relationship("Rider")
 
 
 class RewardLedger(Base):

@@ -4,8 +4,14 @@ import { api } from "../api/client";
 import { CrashAlertRecord } from "../types";
 import { openCrashAlert } from "./openCrashAlert";
 
+// 2s, not 5s: with push notifications not yet wired up (no EAS project
+// linked — see pushNotifications.ts), this poll is the ONLY delivery path
+// for a contact who isn't currently on the live-map screen watching the
+// WebSocket. The poll interval directly is the alert latency in that case.
+const POLL_INTERVAL_MS = 2000;
+
 /**
- * While the calling screen is focused, every 5 seconds: open any unresolved
+ * While the calling screen is focused, every 2 seconds: open any unresolved
  * alert from a connected rider that this contact hasn't acknowledged
  * (GET /alerts/pending, last 30 minutes). This is the safety net behind the
  * live socket and push — it catches an alert raised while the app was
@@ -42,7 +48,7 @@ export function usePendingAlertReplay(onTick?: () => void) {
       const timer = setInterval(() => {
         onTick?.();
         check();
-      }, 5000);
+      }, POLL_INTERVAL_MS);
       return () => clearInterval(timer);
     }, [check, onTick])
   );

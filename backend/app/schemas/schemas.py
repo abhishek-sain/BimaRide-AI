@@ -130,6 +130,7 @@ class RiderOut(BaseModel):
     policy_expiry: Optional[str] = None
     connect_code: str
     emergency_contacts: list[EmergencyContactOut] = []
+    mutual_aid_optin: bool = False
 
     class Config:
         from_attributes = True
@@ -401,3 +402,72 @@ class AlertOut(BaseModel):
     created_at: datetime
     rider_ok_at: Optional[datetime] = None
     acknowledged_by: list[AckEntry] = []
+
+
+# ---------- Standalone fall alert (background monitor, no trip) ----------
+
+class FallAlertIn(BaseModel):
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+
+
+class FallAlertOut(BaseModel):
+    id: str
+    rider_id: str
+    rider_name: str
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+    status: str  # open | acknowledged | rider_ok
+    created_at: datetime
+    rider_ok_at: Optional[datetime] = None
+    acknowledged_by: list[AckEntry] = []
+
+
+# ---------- Nearby places (hospitals/police) ----------
+
+class NearbyPlaceOut(BaseModel):
+    name: str
+    kind: str  # hospital | police | garage
+    lat: float
+    lon: float
+    distance_km: float
+
+
+# ---------- Weather risk ----------
+
+class WeatherRiskOut(BaseModel):
+    level: str  # low | moderate | high
+    reasons: list[str]
+    temperature_c: Optional[float] = None
+    wind_kmh: Optional[float] = None
+    visibility_m: Optional[float] = None
+    condition: Optional[str] = None
+
+
+# ---------- Mutual aid ----------
+
+class MutualAidOptinUpdate(BaseModel):
+    opt_in: bool
+
+
+class MutualAidRespondIn(BaseModel):
+    responding: bool  # true = "I'm on my way", false = "can't help"
+
+
+class MutualAidPingOut(BaseModel):
+    id: str
+    alert_id: str
+    status: str  # notified | responding | dismissed
+    distance_km: float
+    created_at: datetime
+    responded_at: Optional[datetime] = None
+    # Deliberately no rider_name/full identity of the crashed rider here —
+    # a nearby stranger gets enough to decide whether to help and navigate,
+    # not the rider's full profile.
+    kind: str
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+    alert_status: str
+
+    class Config:
+        from_attributes = True

@@ -1,0 +1,8 @@
+{
+  "name": "fall-detection",
+  "version": "0.1.0",
+  "description": "Background fall detection for BimaRide (local Expo module)",
+  "main": "src/index.ts",
+  "license": "UNLICENSED",
+  "private": true
+}

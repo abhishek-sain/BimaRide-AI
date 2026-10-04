@@ -7,7 +7,7 @@
 // any deployed backend MUST be reached over https:// — swap this for your
 // backend's https URL before this app talks to anything but your own dev
 // machine.
-export const API_BASE_URL = "http://192.168.1.23:8000";
+export const API_BASE_URL = "http://192.168.43.172:20000";
 
 // Derived, not separately configured — the live-location WebSocket lives on
 // the same backend as everything else, just with the ws(s):// scheme.

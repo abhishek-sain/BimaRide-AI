@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Linking, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import OsmMapView from "../components/OsmMapView";
+import NearbyPlaces from "../components/NearbyPlaces";
 import { api } from "../api/client";
 import { useAlarm } from "../services/useAlarm";
 import { useAlertStatus } from "../services/useAlertStatus";
@@ -103,6 +104,8 @@ export default function CrashAlertScreen() {
           <Text style={styles.mapsButtonText}>Open in Google Maps</Text>
         </TouchableOpacity>
       )}
+
+      {hasLocation && <NearbyPlaces lat={latNum!} lon={lonNum!} />}
 
       {acknowledged && (
         <Text style={styles.ackNote}>

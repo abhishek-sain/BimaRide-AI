@@ -2,10 +2,12 @@ import React, { useState } from "react";
 import { useRouter } from "expo-router";
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -14,6 +16,12 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { ApiError } from "../api/client";
 import { ProfileUpdatePayload } from "../types";
+import {
+  isFallDetectionActive,
+  requestFallDetectionPermissions,
+  startFallDetection,
+  stopFallDetection,
+} from "../services/fallDetectionService";
 
 function toIntOrUndefined(v: string): number | undefined {
   const n = parseInt(v, 10);
@@ -27,7 +35,45 @@ function toFloatOrUndefined(v: string): number | undefined {
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { rider, updateProfile } = useAuth();
+  const { rider, updateProfile, updateMutualAidOptin } = useAuth();
+  const [mutualAidBusy, setMutualAidBusy] = useState(false);
+
+  const [fallDetectionOn, setFallDetectionOn] = useState(() => Platform.OS === "android" && isFallDetectionActive());
+  const [fallDetectionBusy, setFallDetectionBusy] = useState(false);
+
+  async function toggleFallDetection(value: boolean) {
+    setFallDetectionBusy(true);
+    try {
+      if (value) {
+        const permission = await requestFallDetectionPermissions();
+        if (!permission.granted) {
+          Alert.alert("Can't turn this on", permission.reason ?? "Required permissions were not granted.");
+          return;
+        }
+        const started = await startFallDetection();
+        setFallDetectionOn(started);
+        if (!started) Alert.alert("Could not start monitoring", "Please try again.");
+      } else {
+        stopFallDetection();
+        setFallDetectionOn(false);
+      }
+    } finally {
+      setFallDetectionBusy(false);
+    }
+  }
+
+  async function toggleMutualAid(value: boolean) {
+    setMutualAidBusy(true);
+    try {
+      await updateMutualAidOptin(value);
+    } catch (e) {
+      // revert is implicit: the Switch reads from rider.mutual_aid_optin, which only
+      // changes once the request actually succeeds
+      console.warn("Could not update mutual aid opt-in:", e);
+    } finally {
+      setMutualAidBusy(false);
+    }
+  }
 
   const [name, setName] = useState(rider?.name ?? "");
   const [phone, setPhone] = useState(rider?.phone ?? "");
@@ -103,6 +149,40 @@ export default function ProfileScreen() {
           <Field label="Policy expiry (YYYY-MM-DD)" value={policyExpiry} onChangeText={setPolicyExpiry} placeholder="2027-03-15" />
         </Section>
 
+        {Platform.OS === "android" && (
+          <Section
+            title="Background fall detection"
+            note="Watches for a sudden drop (free-fall followed by impact) even when BimaRide is closed or your phone is locked — not just during a tracked ride. This runs a permanent, low-priority notification (Android requires that for any always-on background monitoring) and needs background location access so a fall can be reported with where it happened. It uses noticeably more battery than normal."
+          >
+            <View style={styles.switchRow}>
+              <Text style={styles.switchLabel}>Always-on fall detection</Text>
+              <Switch
+                value={fallDetectionOn}
+                onValueChange={toggleFallDetection}
+                disabled={fallDetectionBusy}
+                trackColor={{ false: "#2A3450", true: "#22C55E" }}
+                thumbColor="#fff"
+              />
+            </View>
+          </Section>
+        )}
+
+        <Section
+          title="Mutual aid network"
+          note="When someone else's BimaRide crash alert is raised, opted-in riders within ~3 km of the crash get a push notification immediately — alongside the crashed rider's own emergency contact, not instead of them — asking if they can help. Your location is only shared this way while you're on an active ride — not continuously."
+        >
+          <View style={styles.switchRow}>
+            <Text style={styles.switchLabel}>Help nearby riders in emergencies</Text>
+            <Switch
+              value={rider?.mutual_aid_optin ?? false}
+              onValueChange={toggleMutualAid}
+              disabled={mutualAidBusy}
+              trackColor={{ false: "#2A3450", true: "#22C55E" }}
+              thumbColor="#fff"
+            />
+          </View>
+        </Section>
+
         {error && <Text style={styles.error}>{error}</Text>}
 
         <TouchableOpacity style={styles.saveButton} onPress={save} disabled={busy}>
@@ -154,6 +234,8 @@ const styles = StyleSheet.create({
   section: { backgroundColor: "#161F32", borderRadius: 16, padding: 16, marginBottom: 16 },
   sectionTitle: { color: "#fff", fontWeight: "700", fontSize: 15, marginBottom: 8 },
   sectionNote: { color: "#8892A6", fontSize: 12, lineHeight: 17, marginBottom: 12 },
+  switchRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  switchLabel: { color: "#fff", fontSize: 14, fontWeight: "600", flex: 1, marginRight: 12 },
   fieldWrap: { marginBottom: 12 },
   fieldLabel: { color: "#8892A6", fontSize: 12, marginBottom: 6 },
   input: { backgroundColor: "#0B1220", color: "#fff", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15 },

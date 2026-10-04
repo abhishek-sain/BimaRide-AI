@@ -18,15 +18,19 @@ from datetime import datetime, timedelta
 from typing import Union
 
 import anyio.from_thread
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_account, get_current_contact, get_current_rider
 from app.api.live import broadcast_to_trip
-from app.core.database import get_db
-from app.models.models import ContactUser, Connection, CrashAlert, Rider, Trip
+from app.core.database import SessionLocal, get_db
+from app.models.models import ContactUser, Connection, CrashAlert, MutualAidPing, Rider, Trip
 from app.schemas.schemas import AlertOut, CrashAlertIn, CrashAlertOut, RideNotifyOut
+from app.core.logging_utils import get_logger
+from app.services.mutual_aid import find_nearby_optin_riders
 from app.services.push import send_expo_push
+
+logger = get_logger("bimaride.mutual_aid")
 
 router = APIRouter(prefix="/trips", tags=["alerts"])
 alerts_router = APIRouter(prefix="/alerts", tags=["alerts"])
@@ -34,6 +38,47 @@ alerts_router = APIRouter(prefix="/alerts", tags=["alerts"])
 # How long an unresolved alert keeps surfacing to a contact who hasn't
 # handled it. Past this it's history, not an emergency in progress.
 PENDING_WINDOW = timedelta(minutes=30)
+
+# A stranger standing right next to the crash can often reach the rider
+# faster than a distant emergency contact — so nearby opted-in riders are
+# paged immediately, in parallel with the rider's own contacts, not held
+# back waiting to see if a contact responds first.
+MUTUAL_AID_RADIUS_KM = 3.0
+
+
+def _page_nearby_riders(alert_id: str) -> None:
+    """Runs in FastAPI's background-task threadpool right after the crash-
+    alert request has already responded, so the Overpass-free nearby-rider
+    DB lookup and the extra push sends don't add latency to the rider's own
+    alert. Opens its own DB session since the request's session is closed
+    by the time a background task runs."""
+    db = SessionLocal()
+    try:
+        alert = db.query(CrashAlert).filter(CrashAlert.id == alert_id).first()
+        if not alert or alert.status == "rider_ok" or alert.lat is None or alert.lon is None:
+            return  # already resolved as a false alarm, or no location to search around
+        nearby = find_nearby_optin_riders(
+            db, exclude_rider_id=alert.rider_id, lat=alert.lat, lon=alert.lon, radius_km=MUTUAL_AID_RADIUS_KM
+        )
+        if not nearby:
+            return
+        pings = [MutualAidPing(alert_id=alert.id, rider_id=rider.id, distance_km=distance) for rider, distance in nearby]
+        db.add_all(pings)
+        db.commit()
+        for ping, (rider, distance) in zip(pings, nearby):
+            if not rider.push_token:
+                continue
+            send_expo_push(
+                [rider.push_token],
+                title="🚨 Nearby rider may need help",
+                body=f"A crash alert was raised ~{distance} km from your last ride. Tap to see if you can help.",
+                data={"type": "mutual_aid", "ping_id": ping.id, "alert_id": alert.id},
+                category_id="crash_alert",
+            )
+    except Exception:
+        logger.exception("Mutual-aid paging failed for alert %s", alert_id)
+    finally:
+        db.close()
 
 
 def _accepted_contact_tokens(db: Session, rider_id: str) -> list[str]:
@@ -124,6 +169,7 @@ def notify_ride_start(
 def crash_alert(
     trip_id: str,
     payload: CrashAlertIn,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     rider: Rider = Depends(get_current_rider),
 ):
@@ -171,6 +217,9 @@ def crash_alert(
         category_id="crash_alert",
     )
     live_viewers = _broadcast(trip.id, alert_data)
+
+    if payload.lat is not None and payload.lon is not None:
+        background_tasks.add_task(_page_nearby_riders, alert.id)
 
     return CrashAlertOut(alert_id=alert.id, notified=sent, live_viewers=live_viewers)
 

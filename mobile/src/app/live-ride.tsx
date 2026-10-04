@@ -6,8 +6,46 @@ import { api, loadToken } from "../api/client";
 import { RideRecorder } from "../services/rideRecorder";
 import { LiveState, LocalEvent, emptyState } from "../services/localRules";
 import { LiveLocationSocket } from "../services/liveLocationSocket";
-import { Trip } from "../types";
+import { Trip, WeatherRisk } from "../types";
 import SosOverlay from "../components/SosOverlay";
+
+/** Resolves to null (never rejects) if a fix isn't available quickly — a
+ * slow/unavailable GPS lock shouldn't block the ride-start flow, it should
+ * just mean no weather warning is shown. */
+async function getQuickLocation(): Promise<{ lat: number; lon: number } | null> {
+  try {
+    const result = await Promise.race([
+      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
+    ]);
+    if (!result) return null;
+    return { lat: result.coords.latitude, lon: result.coords.longitude };
+  } catch {
+    return null;
+  }
+}
+
+/** Best-effort: a weather-API hiccup should never block starting a ride.
+ * Returns true if the rider should proceed (either low risk, or they
+ * confirmed anyway), false if they backed out. */
+async function confirmWeatherRisk(lat: number, lon: number): Promise<boolean> {
+  try {
+    const risk = await api.get<WeatherRisk>(`/weather/risk?lat=${lat}&lon=${lon}`);
+    if (risk.level === "low" || risk.reasons.length === 0) return true;
+    return await new Promise<boolean>((resolve) => {
+      Alert.alert(
+        risk.level === "high" ? "⚠️ High-risk riding conditions" : "Weather advisory",
+        risk.reasons.join("\n"),
+        [
+          { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+          { text: "Ride anyway", style: "destructive", onPress: () => resolve(true) },
+        ]
+      );
+    });
+  } catch {
+    return true;
+  }
+}
 
 const EVENT_LABEL: Record<string, string> = {
   harsh_brake: "Harsh braking",
@@ -24,6 +62,7 @@ export default function LiveRideScreen() {
   const [recentEvents, setRecentEvents] = useState<LocalEvent[]>([]);
   const [elapsed, setElapsed] = useState(0);
   const [sosReason, setSosReason] = useState<"crash" | "manual" | null>(null);
+  const [sosLocation, setSosLocation] = useState<{ lat?: number; lon?: number } | null>(null);
   const [alertId, setAlertId] = useState<string | null>(null);
   // Resolves to the backend's alert id once the crash-alert call returns.
   // The rider can tap "I'm OK" before that response arrives, so the OK call
@@ -44,6 +83,15 @@ export default function LiveRideScreen() {
           Alert.alert("Location required", "BimaRide needs location access to score your ride.");
           router.back();
           return;
+        }
+
+        const here = await getQuickLocation();
+        if (here) {
+          const proceed = await confirmWeatherRisk(here.lat, here.lon);
+          if (!proceed) {
+            router.back();
+            return;
+          }
         }
 
         const trip = await api.post<Trip>("/trips", {});
@@ -150,12 +198,14 @@ export default function LiveRideScreen() {
   // detection — local alarm, backend crash-alert, live-socket + push.
   function handleCrashDetected(activeTripId: string) {
     setAlertId(null);
+    setSosLocation(lastLocationRef.current ? { lat: lastLocationRef.current.lat, lon: lastLocationRef.current.lon } : null);
     setSosReason("crash");
     reportCrashToContacts(activeTripId, "crash");
   }
 
   function onSosPress() {
     setAlertId(null);
+    setSosLocation(lastLocationRef.current ? { lat: lastLocationRef.current.lat, lon: lastLocationRef.current.lon } : null);
     setSosReason("manual");
     if (tripId) reportCrashToContacts(tripId, "manual");
   }
@@ -230,6 +280,8 @@ export default function LiveRideScreen() {
         <SosOverlay
           reason={sosReason}
           alertId={alertId}
+          lat={sosLocation?.lat}
+          lon={sosLocation?.lon}
           onImOk={markRiderOk}
           onResolved={() => setSosReason(null)}
         />

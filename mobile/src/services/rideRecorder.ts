@@ -2,6 +2,7 @@ import { Accelerometer, Gyroscope } from "expo-sensors";
 import * as Location from "expo-location";
 import { api } from "../api/client";
 import { TripPointOut } from "../types";
+import { FallDetector } from "./fallDetector";
 import { emptyState, LiveState, LocalEvent, stepLiveState } from "./localRules";
 
 const UPLOAD_BATCH_INTERVAL_MS = 5000;
@@ -30,6 +31,7 @@ export class RideRecorder {
   private liveState: LiveState = emptyState();
   private uploadTimer: ReturnType<typeof setInterval> | null = null;
   private lastHeading = 0;
+  private fallDetector = new FallDetector();
 
   constructor(tripId: string, callbacks: RideRecorderCallbacks) {
     this.tripId = tripId;
@@ -45,6 +47,12 @@ export class RideRecorder {
 
     this.accelSub = Accelerometer.addListener((data) => {
       this.latestAccel = data;
+      // Checked on every raw sample (10Hz), not just on GPS fixes (1Hz) —
+      // a drop's free-fall-then-impact signature is over in a few hundred
+      // milliseconds, faster than the next location update would catch.
+      if (this.fallDetector.ingest(data.x, data.y, data.z)) {
+        this.callbacks.onCrashSuspected();
+      }
     });
     this.gyroSub = Gyroscope.addListener((data) => {
       // expo-sensors gyroscope is in rad/s; convert to deg/s to match backend

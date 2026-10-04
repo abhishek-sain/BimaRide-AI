@@ -15,6 +15,7 @@ export interface Rider {
   policy_expiry?: string;
   connect_code: string;
   emergency_contacts: { name: string; phone: string }[];
+  mutual_aid_optin: boolean;
 }
 
 export interface ContactUser {
@@ -125,4 +126,46 @@ export interface CrashAlertRecord {
   created_at: string;
   rider_ok_at?: string | null;
   acknowledged_by: AlertAck[];
+}
+
+export interface NearbyPlace {
+  name: string;
+  kind: "hospital" | "police";
+  lat: number;
+  lon: number;
+  distance_km: number;
+}
+
+export interface WeatherRisk {
+  level: "low" | "moderate" | "high";
+  reasons: string[];
+  temperature_c?: number | null;
+  wind_kmh?: number | null;
+  visibility_m?: number | null;
+  condition?: string | null;
+}
+
+export interface FallAlertRecord {
+  id: string;
+  rider_id: string;
+  rider_name: string;
+  lat?: number | null;
+  lon?: number | null;
+  status: "open" | "acknowledged" | "rider_ok";
+  created_at: string;
+  rider_ok_at?: string | null;
+  acknowledged_by: AlertAck[];
+}
+
+export interface MutualAidPing {
+  id: string;
+  alert_id: string;
+  status: "notified" | "responding" | "dismissed";
+  distance_km: number;
+  created_at: string;
+  responded_at?: string | null;
+  kind: "crash" | "manual";
+  lat?: number | null;
+  lon?: number | null;
+  alert_status: "open" | "acknowledged" | "rider_ok";
 }

@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android", "web"],
+  "apple": {
+    "modules": ["FallDetectionModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.falldetection.FallDetectionModule"]
+  }
+}

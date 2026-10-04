@@ -1,7 +1,21 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import alerts, auth, coach, connections, contacts_auth, insurer, live, sos, trips
+from app.api import (
+    alerts,
+    auth,
+    coach,
+    connections,
+    contacts_auth,
+    insurer,
+    live,
+    mutual_aid,
+    places,
+    safety,
+    sos,
+    trips,
+    weather,
+)
 from app.core.database import Base, SessionLocal, engine, run_lightweight_migrations
 from app.models.models import ContactUser, Rider, gen_connect_code
 
@@ -56,6 +70,10 @@ app.include_router(connections.router)
 app.include_router(alerts.router)
 app.include_router(alerts.alerts_router)
 app.include_router(live.router)
+app.include_router(places.router)
+app.include_router(weather.router)
+app.include_router(mutual_aid.router)
+app.include_router(safety.router)
 
 
 @app.get("/health")

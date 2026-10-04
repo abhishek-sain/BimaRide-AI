@@ -6,6 +6,7 @@ import { Trip } from "../types";
 import { useAuth } from "../context/AuthContext";
 import { useRole } from "../context/RoleContext";
 import { tierLabel, tierColor } from "../services/tiers";
+import { useMutualAidPendingReplay } from "../services/useMutualAidPendingReplay";
 
 export default function HomeScreen() {
   const { rider, logout } = useAuth();
@@ -13,6 +14,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const [trips, setTrips] = useState<Trip[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  useMutualAidPendingReplay();
 
   const load = useCallback(async () => {
     try {

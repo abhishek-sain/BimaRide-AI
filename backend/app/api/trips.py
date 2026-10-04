@@ -66,6 +66,17 @@ def upload_points(
             accel_x=p.accel_x, accel_y=p.accel_y, accel_z=p.accel_z,
             gyro_x=p.gyro_x, gyro_y=p.gyro_y, gyro_z=p.gyro_z, heading=p.heading,
         ))
+
+    # Opportunistically keeps Rider.last_lat/lon fresh — the only "where is
+    # this rider right now" signal available outside an active trip's own
+    # points, and what the mutual-aid network (services/mutual_aid.py) uses
+    # to find nearby opted-in riders to notify about someone else's crash.
+    last_fix = next((p for p in reversed(batch.points) if p.lat is not None and p.lon is not None), None)
+    if last_fix:
+        rider.last_lat = last_fix.lat
+        rider.last_lon = last_fix.lon
+        rider.last_location_at = last_fix.ts
+
     db.commit()
     return {"received": len(batch.points)}
 
